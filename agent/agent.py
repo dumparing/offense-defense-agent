@@ -40,7 +40,11 @@ PLANNER_SYSTEM = (
     "- Extract the required arguments from the task and context.\n"
     "- Respond with ONLY valid JSON, no markdown, no explanation.\n"
     "- Do NOT suggest exploitation or unauthorized actions.\n"
-    "- If no skill fits, set skill to \"none\".\n"
+    "- If no skill fits, or if all relevant analysis is done, set skill to \"none\".\n"
+    "- For binary analysis tasks, the logical order is:\n"
+    "  1. gdb_debug (find crashes) → 2. disassemble (classify vulnerability)\n"
+    "- Do NOT repeat a skill that has already been used (check CURRENT MEMORY STATE).\n"
+    "- The binary_path argument should be copied exactly from the CONTEXT or task.\n"
 )
 
 

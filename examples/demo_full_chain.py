@@ -132,7 +132,18 @@ def demo_single_binary(binary_path: str, quiet: bool = False) -> dict:
 
     agent = SecurityAgent(registry, memory=memory, llm=llm)
 
+    # Check if Ollama is available
+    planner_mode = "LLM (Llama 3 via Ollama)"
+    try:
+        import urllib.request
+        req = urllib.request.Request("http://localhost:11434/api/tags")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            pass
+    except Exception:
+        planner_mode = "Keyword fallback (Ollama not running)"
+
     kv("LLM", str(llm))
+    kv("Planner mode", planner_mode)
     kv("Skills", ", ".join(s["name"] for s in registry.list_skills()))
     kv("Memory", str(memory))
 
@@ -154,9 +165,15 @@ def demo_single_binary(binary_path: str, quiet: bool = False) -> dict:
         skill = result.get("skill_used", "none")
         success = result.get("success", False)
         summary = result.get("summary", "")
+        reasoning = result.get("reasoning", "")
 
-        status = "OK" if success else "FAIL"
+        if skill == "none" or skill is None:
+            print(f"    Step {step_num}: [DONE] Analysis complete")
+            return
+        status = "OK" if success else "ERR"
         print(f"    Step {step_num}: [{status}] {skill}")
+        if reasoning and not quiet:
+            print(f"           Reason: {reasoning[:90]}")
 
         if not quiet:
             # Show key details per skill
@@ -202,18 +219,36 @@ def demo_single_binary(binary_path: str, quiet: bool = False) -> dict:
     kv("Skills used", ", ".join(report.get("skills_used", [])))
     kv("Wall time", f"{elapsed:.1f}s")
 
-    # Crash data
+    # Crash data — deduplicate by signal and show summary
     crash_data = final_memory.get("crash_data", [])
     if crash_data:
         subsection("Crash Analysis")
-        for i, crash in enumerate(crash_data, 1):
-            print(f"    Crash {i}:")
-            kv("Signal", crash.get("signal", "?"), indent=6)
-            kv("Fault address", crash.get("fault_address", "?"), indent=6)
-            kv("Input", crash.get("input_label", "?"), indent=6)
-            bt = crash.get("backtrace", [])
+
+        # Group by signal for cleaner output
+        by_signal: dict = {}
+        for crash in crash_data:
+            sig = crash.get("signal", "unknown")
+            by_signal.setdefault(sig, []).append(crash)
+
+        for sig, crashes_in_group in by_signal.items():
+            inputs = [c.get("input_label", "?") for c in crashes_in_group]
+            print(f"    Signal: {sig} ({len(crashes_in_group)} crash(es))")
+            print(f"      Triggered by: {', '.join(inputs)}")
+
+            # Explain signal for presentation
+            sig_desc = {
+                "SIGSEGV": "Segmentation fault — invalid memory access",
+                "SIGBUS": "Bus error — misaligned or invalid memory access (common on ARM64)",
+                "SIGABRT": "Abort — triggered by failed assertion or heap corruption",
+                "SIGTRAP": "Trap — debugger breakpoint or heap corruption detected",
+            }
+            if sig in sig_desc:
+                print(f"      Meaning: {sig_desc[sig]}")
+
+            # Show backtrace if available
+            bt = crashes_in_group[0].get("backtrace", [])
             if bt:
-                print(f"      Backtrace (top):")
+                print(f"      Backtrace:")
                 for frame in bt[:3]:
                     print(f"        {frame}")
             print()
@@ -243,10 +278,15 @@ def demo_single_binary(binary_path: str, quiet: bool = False) -> dict:
             if protections:
                 prot_strs = []
                 for k, v_val in protections.items():
-                    prot_strs.append(f"{k}={'yes' if v_val else 'no'}")
+                    if v_val is True:
+                        prot_strs.append(f"{k}=enabled")
+                    elif v_val is False:
+                        prot_strs.append(f"{k}=DISABLED")
+                    elif v_val is not None:
+                        prot_strs.append(f"{k}={v_val}")
                 kv("Protections", ", ".join(prot_strs))
-            kv("Risk level", info.get("risk_level", "?"))
-            kv("Dangerous calls", str(info.get("dangerous_calls_count", 0)))
+            kv("Risk level", info.get("risk_level", "?").upper())
+            kv("Dangerous call sites", str(info.get("dangerous_calls_count", 0)))
 
     # All findings
     findings = final_memory.get("findings", [])

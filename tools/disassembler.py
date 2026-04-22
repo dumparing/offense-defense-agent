@@ -70,6 +70,22 @@ DANGEROUS_FUNCTIONS = {
         "severity": "medium",
         "description": "Vulnerable if format string is user-controlled",
     },
+    # Input sources (tracked for format string cross-referencing)
+    "fgets": {
+        "category": "input_source",
+        "severity": "info",
+        "description": "Reads user input — track data flow to printf-family functions",
+    },
+    "read": {
+        "category": "input_source",
+        "severity": "info",
+        "description": "Reads from file descriptor — potential user input source",
+    },
+    "recv": {
+        "category": "input_source",
+        "severity": "info",
+        "description": "Receives network data — potential user input source",
+    },
     # Memory management (UAF indicators)
     "free": {
         "category": "use_after_free",
@@ -286,6 +302,8 @@ def get_binary_info(binary_path: str, timeout: int = 15) -> dict[str, Any]:
         "relro": None,
     }
 
+    file_out = ""
+
     # Use file command
     if shutil.which("file"):
         try:
@@ -328,30 +346,93 @@ def get_binary_info(binary_path: str, timeout: int = 15) -> dict[str, Any]:
         except (subprocess.TimeoutExpired, Exception):
             pass
 
-    # Use readelf for security features
-    if shutil.which("readelf"):
-        try:
-            result = subprocess.run(
-                ["readelf", "-l", safe_path],
-                capture_output=True, text=True, timeout=timeout
-            )
-            info["nx"] = "GNU_STACK" in result.stdout and "RWE" not in result.stdout
+    # --- Platform-specific security feature detection ---
 
-            result2 = subprocess.run(
-                ["readelf", "-d", safe_path],
-                capture_output=True, text=True, timeout=timeout
-            )
-            if "BIND_NOW" in result2.stdout:
-                info["relro"] = "full"
-            elif "GNU_RELRO" in result.stdout:
-                info["relro"] = "partial"
-            else:
-                info["relro"] = "none"
-
-        except (subprocess.TimeoutExpired, Exception):
-            pass
+    if "Mach-O" in file_out:
+        # macOS: use nm for stripped detection, otool for protections
+        _detect_macho_features(safe_path, info, timeout)
+    else:
+        # Linux: use readelf for security features
+        _detect_elf_features(safe_path, info, timeout)
 
     return info
+
+
+def _detect_macho_features(
+    safe_path: str, info: dict[str, Any], timeout: int
+) -> None:
+    """Detect security features on macOS Mach-O binaries."""
+    # Stripped detection: check if local symbols exist via nm
+    if shutil.which("nm"):
+        try:
+            result = subprocess.run(
+                ["nm", safe_path],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            # If nm finds local/debug symbols (T, t, S, etc.), it's not stripped
+            local_symbols = [
+                l for l in result.stdout.splitlines()
+                if l.strip() and not l.strip().startswith("U ")
+                and " U " not in l
+            ]
+            info["stripped"] = len(local_symbols) == 0
+        except Exception:
+            pass
+
+    # Debug symbols: check for DWARF info
+    if shutil.which("dwarfdump"):
+        try:
+            result = subprocess.run(
+                ["dwarfdump", "--debug-info", safe_path],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            info["has_debug_info"] = "DW_TAG_compile_unit" in result.stdout
+        except Exception:
+            pass
+
+    # PIE detection via otool
+    if shutil.which("otool"):
+        try:
+            result = subprocess.run(
+                ["otool", "-hv", safe_path],
+                capture_output=True, text=True, timeout=timeout,
+            )
+            info["pie"] = "PIE" in result.stdout
+            # On macOS ARM64, NX is always enforced by hardware
+            if info.get("arch") == "arm64":
+                info["nx"] = True
+                info["relro"] = "n/a (Mach-O)"
+        except Exception:
+            pass
+
+
+def _detect_elf_features(
+    safe_path: str, info: dict[str, Any], timeout: int
+) -> None:
+    """Detect security features on Linux ELF binaries."""
+    if not shutil.which("readelf"):
+        return
+
+    try:
+        result = subprocess.run(
+            ["readelf", "-l", safe_path],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        info["nx"] = "GNU_STACK" in result.stdout and "RWE" not in result.stdout
+
+        result2 = subprocess.run(
+            ["readelf", "-d", safe_path],
+            capture_output=True, text=True, timeout=timeout,
+        )
+        if "BIND_NOW" in result2.stdout:
+            info["relro"] = "full"
+        elif "GNU_RELRO" in result.stdout:
+            info["relro"] = "partial"
+        else:
+            info["relro"] = "none"
+
+    except (subprocess.TimeoutExpired, Exception):
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -506,6 +587,9 @@ def _analyze_vulnerability_patterns(
         cat = call["category"]
         categories.setdefault(cat, []).append(call)
 
+    # Collect all imported/called function names for cross-referencing
+    all_func_names = set(c["function"] for c in dangerous_calls)
+
     # Buffer overflow pattern: gets/strcpy/sprintf present
     bof_funcs = categories.get("buffer_overflow", [])
     if bof_funcs:
@@ -520,18 +604,37 @@ def _analyze_vulnerability_patterns(
             ),
         })
 
-    # Format string pattern: printf without constant format
+    # Format string pattern: only flag as vulnerability if there's evidence
+    # the format argument could be user-controlled.
+    # Heuristic: printf is only a real format string vuln if the binary also
+    # reads user input (gets, fgets, scanf, read) AND uses printf.
+    # If buffer overflow functions are present, user data can reach printf.
     fmt_funcs = categories.get("format_string", [])
     if fmt_funcs:
-        patterns.append({
-            "vulnerability": "format_string",
-            "confidence": "medium",
-            "evidence": [c["function"] for c in fmt_funcs],
-            "description": (
-                f"Binary calls printf-family functions at {len(fmt_funcs)} site(s). "
-                "If the format argument is user-controlled, this is exploitable."
-            ),
-        })
+        # Check for user-input sources in the binary
+        input_source_funcs = categories.get("input_source", [])
+        input_sources = (
+            all_func_names & {"gets", "fgets", "scanf", "read", "recv", "getline"}
+            | set(c["function"] for c in input_source_funcs)
+        )
+        has_user_input = len(input_sources) > 0 or len(bof_funcs) > 0
+
+        if has_user_input:
+            # User input exists — format string is plausible
+            confidence = "high" if not bof_funcs else "medium"
+            patterns.append({
+                "vulnerability": "format_string",
+                "confidence": confidence,
+                "evidence": list(set(c["function"] for c in fmt_funcs)),
+                "description": (
+                    f"Binary reads user input ({', '.join(input_sources) or 'via overflow'}) "
+                    f"and calls printf-family functions at {len(fmt_funcs)} site(s). "
+                    "Format string attack is possible if user data reaches "
+                    "the format argument."
+                ),
+            })
+        # If no user input sources, don't flag printf as a vulnerability —
+        # it's likely just using constant format strings.
 
     # Use-after-free pattern: malloc + free both present
     has_malloc = "memory_management" in categories

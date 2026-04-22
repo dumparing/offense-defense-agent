@@ -118,14 +118,15 @@ class DisassembleSkill(SkillBase):
 
         # Count missing protections
         missing_protections = []
-        if not binary_info.get("nx"):
-            missing_protections.append("NX (stack is executable)")
-        if not binary_info.get("pie"):
-            missing_protections.append("PIE (no ASLR for binary)")
-        if binary_info.get("relro") == "none":
-            missing_protections.append("RELRO (GOT is writable)")
-        if not binary_info.get("stripped"):
-            missing_protections.append("Not stripped (symbols available)")
+        if binary_info.get("nx") is False:
+            missing_protections.append("NX disabled (stack is executable)")
+        if binary_info.get("pie") is False:
+            missing_protections.append("PIE disabled (no ASLR for binary)")
+        relro = binary_info.get("relro")
+        if relro == "none":
+            missing_protections.append("RELRO disabled (GOT is writable)")
+        if binary_info.get("stripped") is False:
+            missing_protections.append("Not stripped (symbols available to attacker)")
 
         return {
             "binary": binary_path,
@@ -164,9 +165,9 @@ class DisassembleSkill(SkillBase):
                 score += 1
 
         # Missing protections increase exploitability
-        if not binary_info.get("nx"):
+        if binary_info.get("nx") is False:
             score += 2  # Executable stack
-        if not binary_info.get("pie"):
+        if binary_info.get("pie") is False:
             score += 1  # No ASLR
         if binary_info.get("relro") == "none":
             score += 1  # Writable GOT
