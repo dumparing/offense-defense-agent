@@ -20,7 +20,9 @@ CC = gcc
 UNAME := $(shell uname -s)
 
 # Base flags (work on both macOS and Linux)
-CFLAGS_BASE = -fno-stack-protector -g -Wall -Wno-deprecated-declarations
+# -D_FORTIFY_SOURCE=0 disables clang's __strcpy_chk / __gets_chk bounds checking
+# so the intentional vulnerabilities (strcpy overflow, gets) are actually exploitable.
+CFLAGS_BASE = -fno-stack-protector -g -Wall -Wno-deprecated-declarations -D_FORTIFY_SOURCE=0
 
 # Linux-specific flags
 ifeq ($(UNAME),Linux)

@@ -20,6 +20,7 @@ typedef struct {
 } Account;
 
 int main(int argc, char *argv[]) {
+    setbuf(stdout, NULL);  /* disable buffering so output isn't lost on crash */
     printf("=== Heap Overflow Demo ===\n");
     printf("Binary: vuln_heap\n\n");
 

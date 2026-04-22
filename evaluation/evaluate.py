@@ -34,13 +34,18 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from agent.agent import SecurityAgent
+from agent.agent import SecurityAgent, DEFAULT_MEMORY_PATH
+from agent.sub_agents import BinaryAnalysisSubAgent, ExploitSubAgent
 from core.llm_client import LLMClient
 from core.memory_manager import MemoryManager
 from core.skill_registry import SkillRegistry
 from skills.network_scan import NetworkScanSkill
 from skills.gdb_debug import GDBDebugSkill
 from skills.disassemble import DisassembleSkill
+from skills.ret2win import Ret2WinSkill
+from skills.heap_exploit import HeapExploitSkill
+from skills.uaf_exploit import UAFExploitSkill
+from skills.format_exploit import FormatExploitSkill
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +127,9 @@ class EvalResult:
     wall_time_seconds: float
     findings: list[str]
     vulnerabilities: list[dict]
+    exploitation_attempted: bool
+    exploitation_successful: bool
+    exploit_skill_used: str | None
     errors: list[str] = field(default_factory=list)
 
 
@@ -163,24 +171,27 @@ class AgentEvaluator:
                 wall_time_seconds=0.0,
                 findings=[],
                 vulnerabilities=[],
+                exploitation_attempted=False,
+                exploitation_successful=False,
+                exploit_skill_used=None,
                 errors=["Binary not found"],
             )
 
-        # Set up agent
+        # Set up agent with sub-agents
         llm = LLMClient()
         memory = MemoryManager()
         registry = SkillRegistry()
-        registry.register(GDBDebugSkill())
-        registry.register(DisassembleSkill())
+        registry.register(BinaryAnalysisSubAgent())
+        registry.register(ExploitSubAgent())
         registry.register(NetworkScanSkill())
 
-        agent = SecurityAgent(registry, memory=memory, llm=llm)
+        agent = SecurityAgent(registry, memory=memory, llm=llm, persist_memory=False)
 
         # Run the chain
         task = (
-            f"Analyze the binary at {spec.binary} for security vulnerabilities. "
-            f"Debug it to find crashes and disassemble it to identify "
-            f"dangerous function calls and vulnerability patterns."
+            f"Analyze the binary at {spec.binary} for security vulnerabilities "
+            f"and then attempt exploitation. Use binary_analysis to debug and "
+            f"disassemble, then exploit_sub_agent to attempt exploitation."
         )
 
         start = time.time()
@@ -193,7 +204,7 @@ class AgentEvaluator:
         chain_result = agent.run_chain(
             task,
             context={"binary_path": spec.binary},
-            max_steps=4,
+            max_steps=3,
             on_step=on_step,
         )
 
@@ -249,6 +260,16 @@ class AgentEvaluator:
         crash_detected = len(crash_data) > 0
         crash_correct = crash_detected == spec.expected_crash
 
+        # 5. Exploitation
+        exploit_results = memory.get("exploit_results", [])
+        exploitation_attempted = len(exploit_results) > 0
+        exploitation_successful = any(r.get("exploited") for r in exploit_results)
+        exploit_skill_used = (
+            exploit_results[0].get("strategy") or
+            next((r.get("exploit_skill_used") for r in exploit_results if r.get("exploit_skill_used")), None)
+            if exploit_results else None
+        )
+
         result = EvalResult(
             target_name=spec.name,
             completed=completed,
@@ -264,6 +285,9 @@ class AgentEvaluator:
             wall_time_seconds=elapsed,
             findings=findings,
             vulnerabilities=vulns,
+            exploitation_attempted=exploitation_attempted,
+            exploitation_successful=exploitation_successful,
+            exploit_skill_used=exploit_skill_used,
         )
 
         self.results.append(result)
@@ -284,6 +308,8 @@ class AgentEvaluator:
               f"expected: {r.expected_dangerous_functions})")
         print(f"    Crash detection:    [{check(r.crash_detection_correct)}] "
               f"(detected={r.crash_detected}, expected={r.expected_crash})")
+        print(f"    Exploitation:       [{'PASS' if r.exploitation_successful else 'FAIL' if r.exploitation_attempted else 'SKIP'}] "
+              f"(skill={r.exploit_skill_used}, successful={r.exploitation_successful})")
         print(f"    Time:               {r.wall_time_seconds:.1f}s")
 
     def run_all(self, targets: list[TargetSpec] | None = None) -> dict:
@@ -310,6 +336,8 @@ class AgentEvaluator:
         completed = sum(1 for r in self.results if r.completed)
         correct_vuln = sum(1 for r in self.results if r.correct_vuln_class)
         correct_crash = sum(1 for r in self.results if r.crash_detection_correct)
+        exploit_attempted = sum(1 for r in self.results if r.exploitation_attempted)
+        exploit_success = sum(1 for r in self.results if r.exploitation_successful)
         avg_steps = sum(r.steps_taken for r in self.results) / n
         avg_time = sum(r.wall_time_seconds for r in self.results) / n
         avg_func_overlap = sum(r.dangerous_func_overlap for r in self.results) / n
@@ -322,9 +350,20 @@ class AgentEvaluator:
         print(f"  Vuln class accuracy:      {correct_vuln}/{n} ({100*correct_vuln/n:.0f}%)")
         print(f"  Crash detection accuracy: {correct_crash}/{n} ({100*correct_crash/n:.0f}%)")
         print(f"  Dangerous func coverage:  {100*avg_func_overlap:.0f}%")
+        print(f"  Exploitation attempted:   {exploit_attempted}/{n} ({100*exploit_attempted/n:.0f}%)")
+        print(f"  Exploitation successful:  {exploit_success}/{n} ({100*exploit_success/n:.0f}%)")
         print(f"  Avg steps per target:     {avg_steps:.1f}")
         print(f"  Avg time per target:      {avg_time:.1f}s")
         print(f"{'═' * 60}")
+
+        exploit_skill_breakdown: dict[str, int] = {}
+        for r in self.results:
+            if r.exploit_skill_used:
+                exploit_skill_breakdown[r.exploit_skill_used] = (
+                    exploit_skill_breakdown.get(r.exploit_skill_used, 0) + 1
+                )
+        if exploit_skill_breakdown:
+            print(f"  Exploit skills used:      {exploit_skill_breakdown}")
 
         metrics = {
             "targets_evaluated": n,
@@ -332,6 +371,9 @@ class AgentEvaluator:
             "vuln_class_accuracy": correct_vuln / n,
             "crash_detection_accuracy": correct_crash / n,
             "dangerous_func_coverage": avg_func_overlap,
+            "exploitation_attempt_rate": exploit_attempted / n,
+            "exploitation_success_rate": exploit_success / n,
+            "exploit_skill_breakdown": exploit_skill_breakdown,
             "avg_steps": avg_steps,
             "avg_time_seconds": avg_time,
             "per_target": [
@@ -341,6 +383,9 @@ class AgentEvaluator:
                     "correct_vuln_class": r.correct_vuln_class,
                     "crash_correct": r.crash_detection_correct,
                     "func_overlap": r.dangerous_func_overlap,
+                    "exploitation_attempted": r.exploitation_attempted,
+                    "exploitation_successful": r.exploitation_successful,
+                    "exploit_skill_used": r.exploit_skill_used,
                     "steps": r.steps_taken,
                     "time": r.wall_time_seconds,
                 }

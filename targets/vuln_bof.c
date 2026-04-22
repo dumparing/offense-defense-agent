@@ -27,6 +27,7 @@ void vulnerable_function(void) {
 }
 
 int main(int argc, char *argv[]) {
+    setbuf(stdout, NULL);  /* disable buffering so output isn't lost on crash */
     printf("=== Buffer Overflow Demo ===\n");
     printf("Binary: vuln_bof\n");
     printf("Buffer size: 64 bytes\n\n");

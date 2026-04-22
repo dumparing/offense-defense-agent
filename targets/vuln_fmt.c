@@ -33,6 +33,7 @@ void vulnerable_function(void) {
 }
 
 int main(int argc, char *argv[]) {
+    setbuf(stdout, NULL);  /* disable buffering so output isn't lost on crash */
     printf("=== Format String Demo ===\n");
     printf("Binary: vuln_fmt\n");
     printf("secret_value is at %p\n", (void *)&secret_value);

@@ -1,0 +1,48 @@
+\documentclass[conference]{IEEEtran}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{url}
+
+\begin{document}
+
+\title{LLM-Driven Security Testing Agent: A Modular Framework for Autonomous Penetration Testing}
+
+\author{
+\IEEEauthorblockN{Eliot Pontarelli, Jason Gao, Alex Zhou}
+\IEEEauthorblockA{University of Colorado Boulder}
+}
+
+\maketitle
+
+\section{Project Description}
+
+We present a modular framework for autonomous security testing that leverages large language models (LLMs) to orchestrate offensive security tools across a hierarchical three-layer architecture: an agent loop for decision-making, a skills layer for task composition, and tool connectors for subprocess execution. The system follows a reason-act-observe paradigm \cite{react}, accepting natural-language task descriptions and selecting skills through either a local Llama 3 model via Ollama or a keyword fallback, both maintaining a complete decision trace for auditability. A disk-backed \texttt{MemoryManager} serializes findings between runs, allowing sessions to resume from prior state rather than restarting analysis from scratch.
+
+The framework extends to full binary exploitation through a sub-agent architecture in which domain-specific sub-agents register in the parent's skill registry and appear as ordinary skills. \texttt{BinaryAnalysisSubAgent} internally chains GDB dynamic analysis with static disassembly to produce a synthesized vulnerability report. \texttt{ExploitSubAgent} selects and executes the correct exploit strategy based on the identified vulnerability class, delegating to one of four targeted skills: \texttt{ret2win} overwrites the return address to redirect execution to a hidden function; \texttt{heap\_exploit} overflows a heap buffer into an adjacent privilege field; \texttt{uaf\_exploit} performs an ASLR-aware two-phase interaction that reads the binary's own runtime output to compute the address slide before sending the function-pointer payload; and \texttt{format\_exploit} extracts stack memory through user-controlled format specifiers. All inference runs locally through Ollama so no data leaves the machine.
+
+\section{Evaluation}
+
+We evaluated the full analysis-to-exploitation pipeline against four intentionally vulnerable CTF-style binaries: \texttt{vuln\_bof} (stack buffer overflow via \texttt{gets}), \texttt{vuln\_fmt} (format string via \texttt{printf(buffer)}), \texttt{vuln\_uaf} (use-after-free via dangling pointer), and \texttt{vuln\_heap} (heap overflow via \texttt{strcpy}). Each binary was compiled without stack canaries and with \texttt{\_FORTIFY\_SOURCE} disabled. The agent processed each target through a two-step sub-agent chain averaging 1.2 seconds per target. Vulnerability class identification succeeded on all four targets (100\%), correctly labeling each binary's class and identifying its dangerous function (\texttt{gets}, \texttt{printf}, \texttt{malloc}/\texttt{free}, \texttt{strcpy}) for 100\% dangerous function coverage. Exploitation succeeded on three of four targets (75\%): \texttt{heap\_exploit} confirmed privilege escalation by corrupting \texttt{is\_admin}; \texttt{uaf\_exploit} redirected execution to \texttt{admin\_handler} using the recovered ASLR slide; and \texttt{format\_exploit} leaked 22 stack addresses in a single interaction. Completion rate was 4/4 (100\%), with each chain correctly sequencing \texttt{binary\_analysis} then \texttt{exploit\_sub\_agent} without exceeding the three-step budget.
+
+The remaining failure was \texttt{ret2win} on \texttt{vuln\_bof}: macOS enforces ASLR on Apple Silicon even without position-independent compile flags, and the binary provides no in-band address leak before the overflow, making static symbol resolution insufficient. Crash detection scored 0\% across all targets because the macOS execution path cannot capture register state without code-signing entitlements that allow debugger attachment, a platform constraint absent on Linux.
+
+\section{Discussion}
+
+The sub-agent architecture meaningfully improved over a flat skill chain for multi-phase workflows. Encapsulating GDB analysis and disassembly inside \texttt{BinaryAnalysisSubAgent} eliminated the ordering errors that arose when the planner coordinated those skills independently, and routing exploitation through \texttt{ExploitSubAgent} allowed the parent to reason at the level of vulnerability class rather than managing the four-way branch between specific exploit strategies directly. Persistent memory reinforced this design: findings from the analysis sub-agent are replayed into the parent's disk-backed store, so a resumed session proceeds to exploitation without repeating analysis. The ASLR-aware UAF exploit demonstrated that sub-agents can implement multi-turn interaction protocols internally, a capability that flat skills cannot express.
+
+The primary remaining gap is macOS ASLR for the stack overflow target, which resolves on Linux where \texttt{-no-pie} produces a genuinely fixed-address binary. Extending the framework to post-exploitation would require a privilege-escalation sub-agent and a findings schema that carries exploitation artifacts into subsequent planning steps. Upgrading from keyword fallback to full LLM-driven intent classification across all skill transitions would also remove the binary-name heuristics currently needed for vulnerability class disambiguation. These additions fit naturally into the existing skill and sub-agent registry, which requires no changes to the core agent loop for each new capability \cite{autogen}.
+
+\begin{thebibliography}{9}
+
+\bibitem{react}
+S.~Yao, J.~Zhao, D.~Yu, N.~Du, I.~Shafran, K.~Narasimhan, and Y.~Cao, ``ReAct: Synergizing reasoning and acting in language models,'' \textit{arXiv preprint arXiv:2210.03629}, 2023.
+
+\bibitem{autogen}
+Q.~Wu et al., ``AutoGen: Enabling next-gen LLM applications via multi-agent conversation,'' \textit{arXiv preprint arXiv:2308.08155}, 2023.
+
+\bibitem{nmap}
+G.~F.~Lyon, \textit{Nmap Network Scanning}. Insecure.Com LLC, 2009.
+
+\end{thebibliography}
+
+\end{document}

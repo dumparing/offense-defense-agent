@@ -53,6 +53,9 @@ class MemoryManager:
     crash_data: list[dict] = field(default_factory=list)
     vulnerabilities: list[dict] = field(default_factory=list)
 
+    # Exploitation results
+    exploit_results: list[dict] = field(default_factory=list)
+
     # High-level findings (short sentences)
     findings: list[str] = field(default_factory=list)
 
@@ -150,6 +153,25 @@ class MemoryManager:
             if vuln not in self.vulnerabilities:
                 self.vulnerabilities.append(vuln)
 
+    def record_exploit(
+        self,
+        binary: str,
+        vulnerability_class: str,
+        strategy: str | None,
+        exploited: bool,
+        flag_found: bool,
+        output: str = "",
+    ) -> None:
+        """Record an exploitation attempt and its outcome."""
+        self.exploit_results.append({
+            "binary": binary,
+            "vulnerability_class": vulnerability_class,
+            "strategy": strategy,
+            "exploited": exploited,
+            "flag_found": flag_found,
+            "output_snippet": output[:200],
+        })
+
     def record_summary(self, summary: str) -> None:
         """Append a condensed history entry (LLM-generated summary of a step)."""
         self.condensed_history.append(summary)
@@ -182,6 +204,7 @@ class MemoryManager:
                 for a in self.attempted_actions
             ],
             "condensed_history": self.condensed_history,
+            "exploit_results": self.exploit_results,
         }
 
     # ------------------------------------------------------------------
@@ -191,6 +214,59 @@ class MemoryManager:
     def to_json(self, indent: int = 2) -> str:
         """Serialize the full memory state to JSON."""
         return json.dumps(self.get_context_snapshot(), indent=indent, default=str)
+
+    def save(self, path: str) -> None:
+        """Persist full memory state to a JSON file (survives process restart)."""
+        state = {
+            "current_target": self.current_target,
+            "discovered_open_ports": self.discovered_open_ports,
+            "discovered_services": self.discovered_services,
+            "analyzed_binaries": self.analyzed_binaries,
+            "crash_data": self.crash_data,
+            "vulnerabilities": self.vulnerabilities,
+            "exploit_results": self.exploit_results,
+            "findings": self.findings,
+            "condensed_history": self.condensed_history,
+            "attempted_actions": [
+                {
+                    "skill": a.skill,
+                    "arguments": a.arguments,
+                    "success": a.success,
+                    "summary": a.summary,
+                    "timestamp": a.timestamp,
+                }
+                for a in self.attempted_actions
+            ],
+        }
+        with open(path, "w") as f:
+            json.dump(state, f, indent=2, default=str)
+
+    @classmethod
+    def load(cls, path: str) -> "MemoryManager":
+        """Reconstruct a MemoryManager from a previously saved JSON file."""
+        with open(path) as f:
+            state = json.load(f)
+        instance = cls(
+            current_target=state.get("current_target"),
+            discovered_open_ports=state.get("discovered_open_ports", []),
+            discovered_services=state.get("discovered_services", {}),
+            analyzed_binaries=state.get("analyzed_binaries", {}),
+            crash_data=state.get("crash_data", []),
+            vulnerabilities=state.get("vulnerabilities", []),
+            exploit_results=state.get("exploit_results", []),
+            findings=state.get("findings", []),
+            condensed_history=state.get("condensed_history", []),
+        )
+        for rec in state.get("attempted_actions", []):
+            action = ActionRecord(
+                skill=rec["skill"],
+                arguments=rec.get("arguments", {}),
+                success=rec["success"],
+                summary=rec["summary"],
+            )
+            action.timestamp = rec.get("timestamp", _now())
+            instance.attempted_actions.append(action)
+        return instance
 
     def __repr__(self) -> str:
         n_actions = len(self.attempted_actions)
