@@ -48,6 +48,11 @@ class MemoryManager:
     discovered_open_ports: list[int] = field(default_factory=list)
     discovered_services: dict[str, str] = field(default_factory=dict)
 
+    # Binary analysis state
+    analyzed_binaries: dict[str, dict] = field(default_factory=dict)
+    crash_data: list[dict] = field(default_factory=list)
+    vulnerabilities: list[dict] = field(default_factory=list)
+
     # High-level findings (short sentences)
     findings: list[str] = field(default_factory=list)
 
@@ -102,6 +107,49 @@ class MemoryManager:
             if f not in self.findings:
                 self.findings.append(f)
 
+    def record_crash(
+        self,
+        binary: str,
+        signal: str | None,
+        fault_address: str | None,
+        backtrace: list[str],
+        input_label: str = "",
+    ) -> None:
+        """Record crash information from GDB debugging."""
+        self.crash_data.append({
+            "binary": binary,
+            "signal": signal,
+            "fault_address": fault_address,
+            "backtrace": backtrace[:5],
+            "input_label": input_label,
+        })
+
+    def record_binary_analysis(
+        self,
+        binary: str,
+        arch: dict | None = None,
+        protections: dict | None = None,
+        dangerous_calls: list | None = None,
+        vulnerability_patterns: list | None = None,
+        risk_level: str | None = None,
+    ) -> None:
+        """Record disassembly / binary analysis findings."""
+        self.analyzed_binaries[binary] = {
+            "architecture": arch,
+            "protections": protections,
+            "dangerous_calls_count": len(dangerous_calls or []),
+            "risk_level": risk_level,
+        }
+        for pattern in (vulnerability_patterns or []):
+            vuln = {
+                "binary": binary,
+                "vulnerability": pattern.get("vulnerability"),
+                "confidence": pattern.get("confidence"),
+                "description": pattern.get("description"),
+            }
+            if vuln not in self.vulnerabilities:
+                self.vulnerabilities.append(vuln)
+
     def record_summary(self, summary: str) -> None:
         """Append a condensed history entry (LLM-generated summary of a step)."""
         self.condensed_history.append(summary)
@@ -121,6 +169,9 @@ class MemoryManager:
             "current_target": self.current_target,
             "discovered_open_ports": self.discovered_open_ports,
             "discovered_services": self.discovered_services,
+            "analyzed_binaries": self.analyzed_binaries,
+            "crash_data": self.crash_data,
+            "vulnerabilities": self.vulnerabilities,
             "findings": self.findings,
             "actions_taken": [
                 {

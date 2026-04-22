@@ -69,6 +69,98 @@ class Summarizer:
             # Fallback to rule-based extraction
             return self._fallback_summarize_scan(target, services_list)
 
+    def summarize_gdb(self, skill_result: dict[str, Any]) -> dict[str, Any]:
+        """Summarize GDB debug skill results."""
+        data = skill_result.get("data", {})
+        crashes = data.get("crashes", [])
+        any_crash = data.get("any_crash", False)
+        binary = data.get("binary", "unknown")
+        indicators = data.get("vulnerability_indicators", [])
+
+        # Build summary even without LLM
+        if not any_crash:
+            return {
+                "natural_language_summary": (
+                    f"GDB analysis of {binary}: no crashes detected across "
+                    f"{data.get('total_tests', 0)} test inputs."
+                ),
+                "structured": {
+                    "crashed": False,
+                    "findings": [f"No crashes found in {binary}."],
+                },
+            }
+
+        crash_summaries = []
+        for crash in crashes:
+            sig = crash.get("signal", "unknown")
+            addr = crash.get("fault_address", "unknown")
+            label = crash.get("input_label", "unknown")
+            crash_summaries.append(
+                f"Crash with {sig} at {addr} (input: {label})"
+            )
+
+        findings = crash_summaries + [
+            f"Vulnerability indicators: {', '.join(indicators)}"
+        ] if indicators else crash_summaries
+
+        try:
+            return self._llm_summarize_generic("gdb_debug", skill_result)
+        except OllamaError:
+            return {
+                "natural_language_summary": (
+                    f"GDB analysis of {binary}: found {len(crashes)} crash(es) "
+                    f"across {data.get('total_tests', 0)} test inputs. "
+                    f"Signals: {', '.join(set(c.get('signal', '?') for c in crashes))}. "
+                    f"Indicators: {', '.join(indicators)}."
+                ),
+                "structured": {
+                    "crashed": True,
+                    "crash_count": len(crashes),
+                    "signals": list(set(c.get("signal") for c in crashes)),
+                    "indicators": indicators,
+                    "findings": findings,
+                },
+            }
+
+    def summarize_disassembly(self, skill_result: dict[str, Any]) -> dict[str, Any]:
+        """Summarize disassembly analysis results."""
+        data = skill_result.get("data", {})
+        binary = data.get("binary", "unknown")
+        vuln_patterns = data.get("vulnerability_patterns", [])
+        dangerous_calls = data.get("dangerous_calls", [])
+        risk_level = data.get("risk_level", "unknown")
+        missing_protections = data.get("missing_protections", [])
+
+        findings = []
+        for pattern in vuln_patterns:
+            findings.append(
+                f"{pattern['vulnerability']} ({pattern['confidence']} confidence): "
+                f"{pattern['description']}"
+            )
+        if missing_protections:
+            findings.append(
+                f"Missing protections: {', '.join(missing_protections)}"
+            )
+
+        try:
+            return self._llm_summarize_generic("disassemble", skill_result)
+        except OllamaError:
+            return {
+                "natural_language_summary": (
+                    f"Disassembly of {binary}: risk level {risk_level}. "
+                    f"Found {len(dangerous_calls)} dangerous call(s) and "
+                    f"{len(vuln_patterns)} vulnerability pattern(s). "
+                    f"Missing protections: {', '.join(missing_protections) or 'none'}."
+                ),
+                "structured": {
+                    "risk_level": risk_level,
+                    "vulnerability_patterns": vuln_patterns,
+                    "dangerous_calls_count": len(dangerous_calls),
+                    "missing_protections": missing_protections,
+                    "findings": findings,
+                },
+            }
+
     def summarize_generic(self, skill_name: str, skill_result: dict[str, Any]) -> dict[str, Any]:
         """
         Generic summarization for any skill result.
@@ -78,6 +170,12 @@ class Summarizer:
         """
         if skill_name == "network_scan" and skill_result.get("success"):
             return self.summarize_scan(skill_result)
+
+        if skill_name == "gdb_debug" and skill_result.get("success"):
+            return self.summarize_gdb(skill_result)
+
+        if skill_name == "disassemble" and skill_result.get("success"):
+            return self.summarize_disassembly(skill_result)
 
         # Generic path
         try:

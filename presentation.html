@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM-Driven Autonomous Agent for Offensive Security Tasks</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    overflow: hidden;
+    height: 100vh;
+  }
+  .slide {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    padding: 50px 70px;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+  .slide.active { display: flex; }
+  .slide.title-slide { justify-content: center; align-items: center; text-align: center; }
+  h1 { font-size: 44px; font-weight: 700; color: #fff; margin-bottom: 16px; }
+  h2 { font-size: 32px; font-weight: 600; color: #7ec8e3; margin-bottom: 20px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+  .subtitle { font-size: 20px; color: #aaa; margin-bottom: 12px; }
+  .authors { font-size: 18px; color: #888; margin-bottom: 8px; }
+  .affiliation { font-size: 15px; color: #666; margin-bottom: 30px; }
+  .tag { display: inline-block; background: #2a2a3e; border: 1px solid #444; color: #aaa; padding: 6px 14px; border-radius: 4px; font-size: 13px; margin: 3px; }
+  p, li { font-size: 17px; line-height: 1.65; color: #ccc; }
+  ul { margin: 8px 0 8px 30px; }
+  li { margin-bottom: 6px; }
+  strong { color: #e0e0e0; }
+  pre { background: #0d1117; border: 1px solid #333; border-radius: 6px; padding: 14px 18px; font-family: 'Menlo','Consolas',monospace; font-size: 13.5px; line-height: 1.55; color: #c9d1d9; overflow-x: auto; margin: 10px 0; }
+  code { font-family: 'Menlo','Consolas',monospace; background: #2a2a3e; padding: 1px 6px; border-radius: 3px; font-size: 14px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 8px; }
+  .label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #7ec8e3; margin-bottom: 6px; }
+  .note { background: #1e2a3a; border-left: 3px solid #7ec8e3; padding: 10px 14px; margin: 10px 0; font-size: 15px; color: #aac; }
+  .diagram { background: #0d1117; border: 1px solid #333; border-radius: 6px; padding: 20px; font-family: 'Menlo','Consolas',monospace; font-size: 14px; line-height: 1.5; color: #8b949e; white-space: pre; margin: 10px 0; }
+  .diagram .hl { color: #7ec8e3; }
+  .diagram .hl2 { color: #c9a0dc; }
+  .diagram .hl3 { color: #7ee8a0; }
+  .nav { position: fixed; bottom: 24px; right: 30px; display: flex; gap: 10px; align-items: center; z-index: 100; }
+  .nav button { background: #2a2a3e; border: 1px solid #444; color: #ccc; width: 38px; height: 38px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+  .nav button:hover { background: #3a3a5e; }
+  .slide-num { font-family: monospace; font-size: 14px; color: #666; }
+  .progress { position: fixed; top: 0; left: 0; height: 3px; background: #7ec8e3; transition: width 0.3s; z-index: 100; }
+  .kw { color: #ff7b72; } .fn { color: #d2a8ff; } .str { color: #a5d6ff; } .cm { color: #8b949e; } .typ { color: #79c0ff; }
+
+  /* Architecture diagram styles */
+  .arch-diagram { display: flex; flex-direction: column; align-items: center; gap: 0; margin: 10px 0; }
+  .arch-row { display: flex; align-items: center; gap: 16px; }
+  .arch-box {
+    border-radius: 10px; padding: 14px 22px; text-align: center;
+    min-width: 130px; position: relative;
+  }
+  .arch-box .box-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 4px; font-weight: 600; }
+  .arch-box .box-name { font-size: 15px; font-weight: 600; color: #fff; }
+  .arch-box .box-sub { font-size: 11px; color: #999; margin-top: 3px; }
+  .box-blue { background: #1a2d4a; border: 1.5px solid #3a6ea5; }
+  .box-blue .box-label { color: #7ec8e3; }
+  .box-purple { background: #2a1f3d; border: 1.5px solid #7c5cbf; }
+  .box-purple .box-label { color: #c9a0dc; }
+  .box-green { background: #1a3a2a; border: 1.5px solid #4a9; }
+  .box-green .box-label { color: #7ee8a0; }
+  .box-gray { background: #222; border: 1.5px solid #555; }
+  .box-gray .box-label { color: #aaa; }
+  .arch-arrow { color: #555; font-size: 22px; line-height: 1; }
+  .arch-arrow-down { text-align: center; color: #555; font-size: 20px; padding: 4px 0; }
+  .arch-group {
+    border: 1.5px solid #333; border-radius: 12px; padding: 16px 20px;
+    background: #111827; display: flex; gap: 14px; align-items: center;
+  }
+  .arch-group-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #666; margin-bottom: 8px; }
+  .feedback-line {
+    border-left: 2px dashed #555; height: 30px; margin-left: 50%;
+  }
+  .feedback-label { font-size: 11px; color: #666; text-align: center; }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<!-- SLIDE 1: Title -->
+<div class="slide title-slide active">
+  <h1>An LLM-Driven Autonomous Agent<br>for Offensive Security Tasks</h1>
+  <p class="subtitle">Midterm Progress Presentation</p>
+  <p class="authors">Alex Zhou, Eliot Pontarelli, Jason Gao</p>
+  <p class="affiliation">Department of Computer Science, University of Colorado Boulder</p>
+  <div>
+    <span class="tag">Local LLM (Llama 3)</span>
+    <span class="tag">Perception-Action Loop</span>
+    <span class="tag">Sandboxed Environments</span>
+  </div>
+</div>
+
+<!-- SLIDE 2: Project Overview -->
+<div class="slide">
+  <h2>Project Overview</h2>
+  <p>Offensive security tasks like penetration testing, binary analysis, and exploit development require iterative reasoning, tool orchestration, and expert intuition. This project explores whether LLMs can act as autonomous agents that plan and execute such workflows.</p>
+  <p style="margin-top:14px;">We are building an <strong>LLM-driven offensive security agent</strong> that interacts with common security tools (scanners, debuggers, disassemblers) to complete structured attack-oriented tasks in <strong>sandboxed environments</strong>.</p>
+  <p style="margin-top:14px;">The agent follows a <strong>perception-action loop</strong>: issuing tool commands, interpreting results, updating its plan, and adapting strategy. Example tasks include debugging vulnerable binaries, identifying memory corruption primitives, and automated reconnaissance.</p>
+  <p style="margin-top:14px;">The goal is to <strong>evaluate whether LLM agents can reason over tool outputs</strong> and execute multi-step attack workflows in controlled environments, while understanding the risks of deploying them in offensive contexts.</p>
+</div>
+
+<!-- SLIDE 3: Midterm Scope -->
+<div class="slide">
+  <h2>What We've Built So Far</h2>
+  <p>For midterm, we built the <strong>core agent architecture</strong> and got one complete skill working end-to-end with a real LLM planner.</p>
+  <div class="two-col">
+    <div>
+      <p><strong>Completed:</strong></p>
+      <ul>
+        <li><strong>Agent loop</strong>: full perception-action cycle (plan, execute, summarize, remember)</li>
+        <li><strong>Local LLM</strong>: Llama 3 via Ollama for planning and summarization</li>
+        <li><strong>Skill/tool architecture</strong>: modular framework, new tools plug in without agent changes</li>
+        <li><strong>Network scan skill</strong>: nmap-based service scanning with safe subprocess execution</li>
+        <li><strong>Memory manager</strong>: structured state that persists across turns</li>
+        <li><strong>Summarizer</strong>: LLM-based output compression into structured findings</li>
+        <li><strong>Fallbacks</strong>: keyword matching + rule-based summarization when LLM is unavailable</li>
+      </ul>
+    </div>
+    <div>
+      <p><strong>Planned for final:</strong></p>
+      <ul>
+        <li>GDB debugger integration (binary analysis)</li>
+        <li>Disassembler integration (memory corruption primitives)</li>
+        <li>Multi-step attack chain orchestration</li>
+        <li>Evaluation on CTF-style vulnerable targets</li>
+        <li>Safety/risk analysis of autonomous offensive agents</li>
+      </ul>
+      <p style="margin-top:14px;"><strong>Stats:</strong> ~1400 lines of Python, zero external dependencies, 5 core modules, 1 implemented skill.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 4: Architecture Diagram -->
+<div class="slide">
+  <h2>System Architecture</h2>
+  <p>Three-layer architecture with a memory feedback loop. Each layer only talks to the layer below it.</p>
+
+  <div class="arch-diagram">
+    <!-- User -->
+    <div class="arch-row">
+      <div class="arch-box box-gray">
+        <div class="box-label">Input</div>
+        <div class="box-name">User Task</div>
+        <div class="box-sub">"Scan target for open services"</div>
+      </div>
+    </div>
+    <div class="arch-arrow-down">&#9661;</div>
+
+    <!-- Agent Loop -->
+    <div style="border: 1.5px solid #3a6ea5; border-radius: 14px; padding: 18px 24px; background: rgba(26,45,74,0.3); width: 820px;">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #7ec8e3; margin-bottom: 12px; font-weight: 600;">Agent Loop (agent/agent.py)</div>
+      <div class="arch-row" style="justify-content: center;">
+        <div class="arch-box box-purple">
+          <div class="box-label">Perceive + Decide</div>
+          <div class="box-name">Planner LLM</div>
+          <div class="box-sub">Llama 3 via Ollama</div>
+        </div>
+        <div class="arch-arrow">&#10132;</div>
+        <div class="arch-box box-blue">
+          <div class="box-label">Act</div>
+          <div class="box-name">Execute Skill</div>
+          <div class="box-sub">Run chosen tool</div>
+        </div>
+        <div class="arch-arrow">&#10132;</div>
+        <div class="arch-box box-purple">
+          <div class="box-label">Observe</div>
+          <div class="box-name">Summarizer</div>
+          <div class="box-sub">Compress output</div>
+        </div>
+        <div class="arch-arrow">&#10132;</div>
+        <div class="arch-box box-green">
+          <div class="box-label">Update</div>
+          <div class="box-name">Memory</div>
+          <div class="box-sub">Structured state</div>
+        </div>
+      </div>
+      <div style="text-align: center; margin-top: 8px;">
+        <span style="font-size: 12px; color: #666;">&#8627; condensed memory snapshot feeds back to planner each turn</span>
+      </div>
+    </div>
+    <div class="arch-arrow-down">&#9661;</div>
+
+    <!-- Skills Layer -->
+    <div style="border: 1.5px solid #555; border-radius: 14px; padding: 14px 24px; background: rgba(34,34,34,0.4); width: 820px;">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #aaa; margin-bottom: 10px; font-weight: 600;">Skills Layer (skills/*.py)</div>
+      <div class="arch-row" style="justify-content: center;">
+        <div class="arch-box box-blue" style="min-width: 150px;">
+          <div class="box-name" style="font-size: 14px;">network_scan</div>
+          <div class="box-sub">Implemented</div>
+        </div>
+        <div class="arch-box box-gray" style="min-width: 150px; opacity: 0.5;">
+          <div class="box-name" style="font-size: 14px;">gdb_debug</div>
+          <div class="box-sub">Planned</div>
+        </div>
+        <div class="arch-box box-gray" style="min-width: 150px; opacity: 0.5;">
+          <div class="box-name" style="font-size: 14px;">disassembly</div>
+          <div class="box-sub">Planned</div>
+        </div>
+      </div>
+    </div>
+    <div class="arch-arrow-down">&#9661;</div>
+
+    <!-- Tools Layer -->
+    <div style="border: 1.5px solid #555; border-radius: 14px; padding: 14px 24px; background: rgba(34,34,34,0.4); width: 820px;">
+      <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #aaa; margin-bottom: 10px; font-weight: 600;">Tools Layer (tools/*.py) &#10132; External Binaries</div>
+      <div class="arch-row" style="justify-content: center;">
+        <div class="arch-box box-green" style="min-width: 150px;">
+          <div class="box-name" style="font-size: 14px;">nmap_runner</div>
+          <div class="box-sub">nmap -sV</div>
+        </div>
+        <div class="arch-box box-gray" style="min-width: 150px; opacity: 0.5;">
+          <div class="box-name" style="font-size: 14px;">gdb_runner</div>
+          <div class="box-sub">gdb</div>
+        </div>
+        <div class="arch-box box-gray" style="min-width: 150px; opacity: 0.5;">
+          <div class="box-name" style="font-size: 14px;">disasm_runner</div>
+          <div class="box-sub">objdump</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 5: Project Structure -->
+<div class="slide">
+  <h2>Project Structure</h2>
+  <div class="two-col">
+    <div>
+      <pre>offense-defense-agent/
+├── agent/
+│   └── agent.py            <span class="cm"># Perception-action loop</span>
+├── core/
+│   ├── llm_client.py       <span class="cm"># Ollama HTTP client</span>
+│   ├── memory_manager.py   <span class="cm"># Structured state store</span>
+│   ├── skill_base.py       <span class="cm"># Abstract skill interface</span>
+│   ├── skill_registry.py   <span class="cm"># Skill discovery</span>
+│   └── summarizer.py       <span class="cm"># LLM output compression</span>
+├── skills/
+│   └── network_scan.py     <span class="cm"># Nmap scan skill</span>
+├── tools/
+│   └── nmap_runner.py      <span class="cm"># Safe subprocess wrapper</span>
+├── examples/
+│   ├── run_scan.py         <span class="cm"># Single-turn demo</span>
+│   └── demo_agent_session.py <span class="cm"># Multi-turn demo</span>
+├── ARCHITECTURE.md
+└── README.md</pre>
+    </div>
+    <div>
+      <p>Each directory has a single responsibility:</p>
+      <ul>
+        <li><code>agent/</code> : orchestration and the perception-action loop</li>
+        <li><code>core/</code> : LLM client, memory, summarizer, and skill interfaces</li>
+        <li><code>skills/</code> : high-level capabilities (one per tool)</li>
+        <li><code>tools/</code> : subprocess wrappers for external binaries</li>
+        <li><code>examples/</code> : runnable demo scripts</li>
+      </ul>
+      <p style="margin-top:14px;">Adding a new offensive tool means creating one file in <code>tools/</code>, one in <code>skills/</code>, and registering it. No changes to the agent loop or any other module.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 6: Agent Loop -->
+<div class="slide">
+  <h2>The Perception-Action Loop</h2>
+  <p>The agent loop runs one cycle per turn: perceive state, decide via LLM, act, observe result, update memory. Every step is logged to a decision trace for evaluation.</p>
+  <div class="two-col">
+    <div>
+      <p class="label">agent/agent.py</p>
+      <pre><span class="kw">def</span> <span class="fn">run</span>(self, task, context=None):
+    <span class="cm"># PERCEIVE</span>
+    snapshot = self.memory.get_context_snapshot()
+
+    <span class="cm"># DECIDE</span>
+    plan = self._plan(task, context, snapshot)
+
+    <span class="cm"># ACT</span>
+    result = skill.execute(**args)
+
+    <span class="cm"># OBSERVE</span>
+    summarized = self.summarizer.summarize_generic(
+        skill_name, result)
+
+    <span class="cm"># UPDATE</span>
+    self.memory.record_action(...)
+    self.memory.record_scan_results(...)
+
+    <span class="kw">return</span> self._result(
+        success=..., summary=...,
+        memory_snapshot=..., trace=...)</pre>
+    </div>
+    <div>
+      <p>The <strong>decision trace</strong> records every step: task received, memory read, planner decision, skill execution, summarization, memory update. This lets us reconstruct exactly why the agent chose a particular tool and how it interpreted results.</p>
+      <p style="margin-top:12px;">The agent takes three injectable components:</p>
+      <pre><span class="fn">SecurityAgent</span>(
+    registry,      <span class="cm"># available skills</span>
+    memory=memory, <span class="cm"># shared state</span>
+    llm=llm,       <span class="cm"># local Llama client</span>
+)</pre>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 7: LLM Planner -->
+<div class="slide">
+  <h2>LLM Planner: Tool Selection</h2>
+  <p>Each turn, the planner receives the task, skill catalog, and memory snapshot. It returns strict JSON specifying which tool to run, arguments, and reasoning.</p>
+  <div class="two-col">
+    <div>
+      <p class="label">Planner prompt (simplified)</p>
+      <pre>TASK: "Scan the target for open services"
+CONTEXT: {"target_ip": "127.0.0.1"}
+MEMORY: {}
+AVAILABLE SKILLS: [{"name": "network_scan", ...}]</pre>
+      <p class="label" style="margin-top:12px;">Planner response</p>
+      <pre>{
+  <span class="str">"skill"</span>: <span class="str">"network_scan"</span>,
+  <span class="str">"arguments"</span>: {<span class="str">"target_ip"</span>: <span class="str">"127.0.0.1"</span>},
+  <span class="str">"reasoning_summary"</span>: <span class="str">"Task requests
+    reconnaissance; network_scan fits."</span>
+}</pre>
+    </div>
+    <div>
+      <p>The selected skill is <strong>validated against the registry</strong> before execution. Invalid JSON or unknown skills produce readable errors.</p>
+      <p style="margin-top:12px;"><strong>Why local?</strong> Scan results and attack plans should not be sent to cloud APIs. Llama 3 via Ollama keeps all data on-machine. No API keys or billing.</p>
+      <p style="margin-top:12px;"><strong>Fallback:</strong> if Ollama is down, the agent falls back to keyword-based skill matching. The trace shows which path ran.</p>
+      <p style="margin-top:12px;">As we add more skills for the final, the planner will make increasingly complex decisions about tool sequencing.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 8: Ollama Client -->
+<div class="slide">
+  <h2>Local LLM Client</h2>
+  <p>Pure standard library HTTP client for Ollama at <code>localhost:11434</code>. Model configurable via <code>OLLAMA_MODEL</code> env var.</p>
+  <div class="two-col">
+    <div>
+      <p class="label">core/llm_client.py</p>
+      <pre><span class="kw">def</span> <span class="fn">generate_json</span>(self, prompt, system_prompt=None):
+    raw = self._call_generate(prompt, system_prompt)
+    parsed = self._try_parse_json(raw)
+    <span class="kw">if</span> parsed <span class="kw">is not</span> None:
+        <span class="kw">return</span> parsed
+
+    <span class="cm"># Retry with correction prompt</span>
+    correction = <span class="str">"Respond with ONLY valid JSON..."</span>
+    raw = self._call_generate(correction, ...)
+    parsed = self._try_parse_json(raw)
+    <span class="kw">if</span> parsed: <span class="kw">return</span> parsed
+
+    <span class="kw">raise</span> <span class="typ">OllamaJSONError</span>(<span class="str">"Failed to parse"</span>)</pre>
+    </div>
+    <div>
+      <p>Handles common LLM output quirks:</p>
+      <ul>
+        <li>Strips markdown code fences</li>
+        <li>Finds JSON objects embedded in free text</li>
+        <li>Retries with explicit correction on parse failure</li>
+      </ul>
+      <p style="margin-top:12px;"><strong>Custom exceptions</strong> for clear errors:</p>
+      <ul>
+        <li><code>OllamaConnectionError</code>: server not running</li>
+        <li><code>OllamaModelNotFoundError</code>: model not pulled</li>
+        <li><code>OllamaJSONError</code>: unparseable output</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 9: Skill System -->
+<div class="slide">
+  <h2>Skill Interface and Registry</h2>
+  <p>All skills implement the same abstract interface. The registry lets the planner discover skills automatically.</p>
+  <div class="two-col">
+    <div>
+      <p class="label">core/skill_base.py</p>
+      <pre><span class="kw">class</span> <span class="typ">SkillBase</span>(ABC):
+    name: <span class="typ">str</span>         <span class="cm"># "network_scan"</span>
+    description: <span class="typ">str</span>  <span class="cm"># one-line for planner</span>
+    input_schema: <span class="typ">dict</span> <span class="cm"># required params</span>
+
+    <span class="kw">def</span> <span class="fn">execute</span>(self, **kwargs) -> <span class="typ">dict</span>:
+        <span class="cm"># returns {success, data, error}</span>
+
+    <span class="kw">def</span> <span class="fn">validate_inputs</span>(self, **kwargs):
+        <span class="cm"># checks all required fields present</span></pre>
+      <p class="label" style="margin-top:10px;">Registration</p>
+      <pre>registry = <span class="typ">SkillRegistry</span>()
+registry.register(<span class="typ">NetworkScanSkill</span>())
+<span class="cm"># registry.register(GDBDebugSkill())</span></pre>
+    </div>
+    <div>
+      <p>The planner calls <code>registry.list_skills()</code> to see all available skills. Adding a new skill means the planner automatically discovers it.</p>
+      <p style="margin-top:12px;"><strong>Uniform return format</strong> from every skill:</p>
+      <pre>{ <span class="str">"success"</span>: <span class="typ">true</span>,
+  <span class="str">"data"</span>: { ... },
+  <span class="str">"error"</span>: <span class="typ">null</span> }</pre>
+      <p style="margin-top:12px;">The agent loop, summarizer, and memory manager all work with any skill without special-casing.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 10: Network Scan & Safety -->
+<div class="slide">
+  <h2>Network Scan Skill and Subprocess Safety</h2>
+  <p>First implemented skill: nmap service version detection (<code>-sV</code>). Multiple safety layers prevent command injection and ensure reliable operation.</p>
+  <div class="two-col">
+    <div>
+      <p class="label">tools/nmap_runner.py</p>
+      <pre><span class="kw">from</span> ipaddress <span class="kw">import</span> ip_address
+
+<span class="kw">def</span> <span class="fn">_validate_target</span>(target):
+    ip_address(target)  <span class="cm"># raises ValueError</span>
+    <span class="kw">return</span> target
+
+<span class="kw">def</span> <span class="fn">run_nmap_service_scan</span>(target, timeout=120):
+    safe_target = _validate_target(target)
+    <span class="kw">if</span> shutil.which(<span class="str">"nmap"</span>) <span class="kw">is</span> None:
+        <span class="kw">return</span> {<span class="str">"error"</span>: <span class="str">"nmap not installed"</span>}
+
+    result = subprocess.run(
+        [<span class="str">"nmap"</span>, <span class="str">"-sV"</span>, safe_target],
+        timeout=timeout,
+        capture_output=True, text=True)
+    <span class="kw">return</span> {<span class="str">"services"</span>: _parse_nmap_output(...)}</pre>
+    </div>
+    <div>
+      <p><strong>Safety measures</strong> (same pattern for future GDB/disassembler wrappers):</p>
+      <ul>
+        <li><strong>IP validation</strong>: only valid IPv4/IPv6 passes through</li>
+        <li><strong>No <code>shell=True</code></strong>: args as list, no shell injection</li>
+        <li><strong>120s timeout</strong>: prevents hung processes</li>
+        <li><strong>Tool check</strong>: verifies nmap exists before execution</li>
+      </ul>
+      <p style="margin-top:12px;">Output parsed via regex into structured service dicts:</p>
+      <pre><span class="cm"># 22/tcp open ssh OpenSSH 8.9</span>
+r<span class="str">"^\d+/(tcp|udp)\s+(open|filtered|closed)\s+(\S+)\s*(.*)"</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 11: Summarizer -->
+<div class="slide">
+  <h2>Summarizer: Output Compression</h2>
+  <p>After each skill runs, the summarizer uses the local LLM to compress raw output into a concise summary and structured findings. This is what gets stored in memory, not raw tool text.</p>
+  <div class="two-col">
+    <div>
+      <p class="label">Example output</p>
+      <pre>{
+  <span class="str">"open_ports"</span>: [22, 80, 443],
+  <span class="str">"services"</span>: {
+    <span class="str">"22"</span>: <span class="str">"ssh"</span>,
+    <span class="str">"80"</span>: <span class="str">"http"</span>,
+    <span class="str">"443"</span>: <span class="str">"https"</span>
+  },
+  <span class="str">"findings"</span>: [
+    <span class="str">"3 accessible services detected"</span>,
+    <span class="str">"HTTP/HTTPS may host web apps"</span>
+  ]
+}</pre>
+    </div>
+    <div>
+      <p>This is critical for multi-step workflows. When chaining tools (scan, debug, disassemble), raw output would exceed the LLM context window. The summarizer keeps state compact.</p>
+      <p style="margin-top:12px;"><strong>Fallback:</strong> rule-based extraction when LLM is unavailable. Pipeline never breaks.</p>
+      <p style="margin-top:12px;">System prompt enforces factual output:</p>
+      <pre><span class="str">"Be concise and factual.
+Do NOT fabricate findings not
+present in the data."</span></pre>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 12: Memory Manager -->
+<div class="slide">
+  <h2>Memory Manager: Structured State</h2>
+  <p>Stores structured findings across turns. The planner reads a compact snapshot each turn instead of raw tool output, preventing context bloat.</p>
+  <div class="two-col">
+    <div>
+      <p class="label">core/memory_manager.py</p>
+      <pre><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="typ">MemoryManager</span>:
+    current_target: <span class="typ">str</span> | None
+    discovered_open_ports: <span class="typ">list</span>[int]
+    discovered_services: <span class="typ">dict</span>[str, str]
+    findings: <span class="typ">list</span>[str]
+    attempted_actions: <span class="typ">list</span>[ActionRecord]
+    condensed_history: <span class="typ">list</span>[str]</pre>
+    </div>
+    <div>
+      <p><strong>Key methods:</strong></p>
+      <ul>
+        <li><code>record_scan_results()</code>: merge ports/services, deduplicate</li>
+        <li><code>record_findings()</code>: add factual observations</li>
+        <li><code>record_action()</code>: log skill execution and outcome</li>
+        <li><code>get_context_snapshot()</code>: compact dict for planner</li>
+      </ul>
+      <p style="margin-top:12px;">Essential for multi-step chains. When the agent goes from recon to debugging to disassembly, memory carries findings forward without blowing up the context window.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 13: Multi-Turn Flow -->
+<div class="slide">
+  <h2>Multi-Turn Workflow</h2>
+  <p>Both turns share the same <code>MemoryManager</code> object. The second turn sees everything the first discovered.</p>
+  <div class="diagram"><span class="hl">TURN 1</span>: "Scan the target for open services"
+   Planner sees empty memory -> selects network_scan
+   Nmap runs -> summarized -> memory updated
+
+   Memory after turn 1:
+   ├── current_target: "127.0.0.1"
+   ├── discovered_open_ports: [22, 80]
+   ├── discovered_services: {"22": "ssh", "80": "http"}
+   └── findings: ["2 services detected on target"]
+
+               <span class="hl2">same memory object passed to next turn</span>
+
+<span class="hl">TURN 2</span>: "Summarize the most important findings so far"
+   Planner sees populated memory -> no re-scan needed
+   Produces summary from existing state</div>
+  <p style="margin-top:10px;">For the final, this mechanism supports longer chains: scan, identify service, debug binary, find memory corruption. Each step reads structured results from memory.</p>
+</div>
+
+<!-- SLIDE 14: Failure Handling & Demo -->
+<div class="slide">
+  <h2>Failure Handling and Demo</h2>
+  <div class="two-col">
+    <div>
+      <p><strong>Graceful degradation at every layer:</strong></p>
+      <ul>
+        <li><strong>Ollama down</strong>: keyword fallback + rule-based summarization</li>
+        <li><strong>Model not pulled</strong>: clear error with fix command</li>
+        <li><strong>Bad JSON</strong>: retry with correction prompt</li>
+        <li><strong>nmap missing</strong>: detected before subprocess</li>
+        <li><strong>Invalid target</strong>: rejected at IP validation</li>
+        <li><strong>Timeout</strong>: 120s limit, clean error</li>
+        <li><strong>Unknown skill</strong>: validated against registry</li>
+      </ul>
+      <div class="note">Every failure produces a readable message, never a raw traceback.</div>
+    </div>
+    <div>
+      <p class="label">Setup and run</p>
+      <pre><span class="cm"># Start Ollama + pull model</span>
+ollama serve
+ollama pull llama3:8b
+
+<span class="cm"># Single-turn scan</span>
+python3 examples/run_scan.py
+
+<span class="cm"># Multi-turn memory demo</span>
+python3 examples/demo_agent_session.py</pre>
+      <p style="margin-top:10px;"><strong>Output includes:</strong> planner decision + reasoning, summarized findings, structured JSON, memory snapshot, decision trace.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 15: Next Steps & Takeaways -->
+<div class="slide">
+  <h2>Next Steps and Takeaways</h2>
+  <div class="two-col">
+    <div>
+      <p><strong>Remaining for final:</strong></p>
+      <ul>
+        <li><strong>GDB skill</strong>: debugging vulnerable binaries, identifying crash points</li>
+        <li><strong>Disassembler skill</strong>: finding memory corruption (buffer overflows, format strings, UAF)</li>
+        <li><strong>Multi-step chains</strong>: scan, debug, disassemble, orchestrated by the planner</li>
+        <li><strong>Evaluation</strong>: completion rate, correctness, efficiency on CTF targets</li>
+        <li><strong>Safety analysis</strong>: failure modes and risks of autonomous offensive agents</li>
+      </ul>
+      <p style="margin-top:12px;">Each new tool follows the same pattern: subprocess wrapper, skill class, register. Architecture is ready.</p>
+    </div>
+    <div>
+      <p><strong>Midterm takeaways:</strong></p>
+      <ul>
+        <li><strong>Perception-action architecture</strong> works: plan, execute, observe, update</li>
+        <li><strong>Local LLM</strong> can select tools and extract params from natural language</li>
+        <li><strong>Memory + summarization</strong> solve context bloat for multi-step workflows</li>
+        <li><strong>Modular architecture</strong> is ready to scale with new offensive tools</li>
+        <li><strong>~1400 lines</strong> of Python, zero external dependencies</li>
+      </ul>
+      <div class="note">Foundation is in place. Second half focuses on real offensive tools (GDB, disassemblers) and evaluation on structured attack tasks.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+  <span class="slide-num"><span id="cur">1</span>/<span id="tot">15</span></span>
+  <button onclick="prev()">&#8592;</button>
+  <button onclick="next()">&#8594;</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let cur = 0;
+  function show(n) {
+    slides[cur].classList.remove('active');
+    cur = (n + slides.length) % slides.length;
+    slides[cur].classList.add('active');
+    document.getElementById('cur').textContent = cur + 1;
+    document.getElementById('progress').style.width = ((cur + 1) / slides.length * 100) + '%';
+  }
+  function next() { show(cur + 1); }
+  function prev() { show(cur - 1); }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+  });
+  let ts = 0;
+  document.addEventListener('touchstart', e => { ts = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const d = ts - e.changedTouches[0].clientX;
+    if (Math.abs(d) > 50) d > 0 ? next() : prev();
+  });
+  show(0);
+</script>
+
+</body>
+</html>

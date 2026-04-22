@@ -52,6 +52,14 @@ KEYWORD_SKILL_MAP: dict[str, list[str]] = {
     "network_scan": [
         "scan", "port", "service", "nmap", "recon", "reconnaissance",
     ],
+    "gdb_debug": [
+        "debug", "gdb", "crash", "fuzz", "overflow", "segfault", "binary",
+        "exploit", "buffer",
+    ],
+    "disassemble": [
+        "disassemble", "disasm", "objdump", "analyze", "reverse",
+        "vulnerability", "static", "format string", "uaf", "assembly",
+    ],
 }
 
 
@@ -93,8 +101,129 @@ class SecurityAgent:
         self.trace: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
-    # Public entry point
+    # Public entry points
     # ------------------------------------------------------------------
+
+    def run_chain(
+        self,
+        task: str,
+        context: dict[str, Any] | None = None,
+        max_steps: int = 5,
+        on_step: Any = None,
+    ) -> dict:
+        """
+        Execute a multi-step attack chain, orchestrated by the planner.
+
+        The planner decides which skill to run at each step based on the
+        accumulated memory. The chain stops when:
+            - The planner selects "done" (analysis complete)
+            - max_steps is reached
+            - A critical error occurs
+
+        Args:
+            task:      High-level objective (e.g. "Analyze vuln_bof for vulnerabilities").
+            context:   Initial context dict.
+            max_steps: Maximum number of agent turns.
+            on_step:   Optional callback(step_num, step_result) for live reporting.
+
+        Returns:
+            Dict with: steps (list of per-step results), final_memory,
+            final_report, total_steps.
+        """
+        context = context or {}
+        steps: list[dict] = []
+        self._log("chain_started", {"task": task, "max_steps": max_steps})
+
+        # Preserve key context across steps (e.g. binary_path, target_ip)
+        persistent_context = dict(context)
+
+        for step_num in range(1, max_steps + 1):
+            # Build the chain-aware task prompt
+            chain_task = self._build_chain_prompt(task, step_num, max_steps)
+
+            step_result = self.run(chain_task, context=persistent_context)
+            steps.append({
+                "step": step_num,
+                "skill_used": step_result.get("skill_used"),
+                "success": step_result.get("success"),
+                "summary": step_result.get("summary"),
+                "reasoning": step_result.get("reasoning"),
+            })
+
+            if on_step:
+                on_step(step_num, step_result)
+
+            # Check if the planner signaled completion
+            if step_result.get("skill_used") is None:
+                self._log("chain_complete", {"reason": "planner said done", "steps": step_num})
+                break
+
+        # Build final report
+        final_report = self._build_chain_report(task, steps)
+
+        return {
+            "steps": steps,
+            "total_steps": len(steps),
+            "final_memory": self.memory.get_context_snapshot(),
+            "final_report": final_report,
+            "trace": self.trace,
+        }
+
+    def _build_chain_prompt(
+        self, original_task: str, step_num: int, max_steps: int
+    ) -> str:
+        """Build a step-aware prompt that guides the planner through the chain."""
+        memory = self.memory.get_context_snapshot()
+        actions = memory.get("actions_taken", [])
+        skills_used = [a["skill"] for a in actions]
+
+        if step_num == 1:
+            return original_task
+
+        # Guide the planner based on what's been done
+        prompt_parts = [f"Continue analyzing: {original_task}"]
+        prompt_parts.append(f"Step {step_num}/{max_steps}.")
+        prompt_parts.append(f"Skills already used: {', '.join(skills_used)}.")
+
+        # Suggest next logical skill
+        if "gdb_debug" not in skills_used and "disassemble" not in skills_used:
+            prompt_parts.append(
+                "Consider debugging the binary with gdb_debug to find crash points, "
+                "or disassembling it to find dangerous function calls."
+            )
+        elif "gdb_debug" in skills_used and "disassemble" not in skills_used:
+            prompt_parts.append(
+                "Crash analysis is done. Now disassemble the binary to classify "
+                "the vulnerability and identify the root cause."
+            )
+        elif "disassemble" in skills_used and "gdb_debug" not in skills_used:
+            prompt_parts.append(
+                "Static analysis is done. Now debug the binary with gdb_debug "
+                "to confirm the vulnerability is triggerable."
+            )
+        else:
+            prompt_parts.append(
+                "Both debugging and disassembly are done. "
+                "If analysis is complete, select skill 'none' to finish."
+            )
+
+        return " ".join(prompt_parts)
+
+    def _build_chain_report(
+        self, task: str, steps: list[dict]
+    ) -> dict[str, Any]:
+        """Build a final summary report from a completed chain."""
+        memory = self.memory.get_context_snapshot()
+
+        return {
+            "task": task,
+            "steps_completed": len(steps),
+            "skills_used": [s["skill_used"] for s in steps if s["skill_used"]],
+            "all_findings": memory.get("findings", []),
+            "vulnerabilities": memory.get("vulnerabilities", []),
+            "crash_data": memory.get("crash_data", []),
+            "analyzed_binaries": memory.get("analyzed_binaries", {}),
+        }
 
     def run(self, task: str, context: dict[str, Any] | None = None) -> dict:
         """
@@ -177,6 +306,28 @@ class SecurityAgent:
                 services=structured.get("services", {}),
             )
 
+        if skill_name == "gdb_debug" and skill_result.get("success"):
+            data = skill_result.get("data", {})
+            for crash in data.get("crashes", []):
+                self.memory.record_crash(
+                    binary=data.get("binary", "unknown"),
+                    signal=crash.get("signal"),
+                    fault_address=crash.get("fault_address"),
+                    backtrace=crash.get("backtrace", []),
+                    input_label=crash.get("input_label", ""),
+                )
+
+        if skill_name == "disassemble" and skill_result.get("success"):
+            data = skill_result.get("data", {})
+            self.memory.record_binary_analysis(
+                binary=data.get("binary", "unknown"),
+                arch=data.get("architecture"),
+                protections=data.get("protections"),
+                dangerous_calls=data.get("dangerous_calls"),
+                vulnerability_patterns=data.get("vulnerability_patterns"),
+                risk_level=data.get("risk_level"),
+            )
+
         if structured.get("findings"):
             self.memory.record_findings(structured["findings"])
 
@@ -243,20 +394,64 @@ class SecurityAgent:
     ) -> dict[str, Any]:
         """
         Simple keyword-based skill selection (fallback when LLM is unavailable).
-        Preserves the original behavior so the demo works without Ollama.
+
+        Aware of already-used skills to avoid repeating the same one.
+        If the chain prompt mentions skills already used, the fallback
+        picks the next unused skill in the logical order.
         """
         task_lower = task.lower()
-        best_skill = None
-        best_score = 0
 
-        for skill_name, keywords in KEYWORD_SKILL_MAP.items():
-            score = sum(1 for kw in keywords if kw in task_lower)
-            if score > best_score:
-                best_score = score
-                best_skill = skill_name
+        # Check what skills have already been used
+        actions = self.memory.get_context_snapshot().get("actions_taken", [])
+        used_skills = set(a["skill"] for a in actions)
 
-        # Try to extract target_ip from task or context
+        # If chain prompt says "all done" or we've used both analysis skills, stop
+        if "analysis is complete" in task_lower or "select skill 'none'" in task_lower:
+            return {
+                "skill": "none",
+                "arguments": {},
+                "reasoning_summary": "[Keyword fallback] All analysis steps completed.",
+            }
+
+        # Logical chain ordering for binary analysis
+        chain_order = ["gdb_debug", "disassemble"]
+
+        # If we have binary_path context and haven't done all chain steps,
+        # pick the next unused step
+        if "binary_path" in context or any(
+            kw in task_lower for kw in ["binary", "debug", "disassemble", "analyze", "crash", "vulnerability"]
+        ):
+            for skill_name in chain_order:
+                if skill_name not in used_skills:
+                    best_skill = skill_name
+                    best_score = 1
+                    break
+            else:
+                # All chain steps done
+                return {
+                    "skill": "none",
+                    "arguments": context,
+                    "reasoning_summary": (
+                        "[Keyword fallback] All analysis skills already used. "
+                        "Chain complete."
+                    ),
+                }
+        else:
+            # General keyword matching
+            best_skill = None
+            best_score = 0
+            for skill_name, keywords in KEYWORD_SKILL_MAP.items():
+                if skill_name in used_skills:
+                    continue  # Skip already-used skills
+                score = sum(1 for kw in keywords if kw in task_lower)
+                if score > best_score:
+                    best_score = score
+                    best_skill = skill_name
+
+        # Try to extract arguments from task or context
         arguments: dict[str, Any] = {}
+
+        # Extract target_ip
         if "target_ip" in context:
             arguments["target_ip"] = context["target_ip"]
         else:
@@ -265,6 +460,15 @@ class SecurityAgent:
             )
             if ip_match:
                 arguments["target_ip"] = ip_match.group()
+
+        # Extract binary_path
+        if "binary_path" in context:
+            arguments["binary_path"] = context["binary_path"]
+        else:
+            # Look for file paths in the task
+            path_match = re.search(r"[./\w]+(?:vuln_\w+|\.elf|\.bin)", task)
+            if path_match:
+                arguments["binary_path"] = path_match.group()
 
         return {
             "skill": best_skill or "none",
