@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM-Driven Autonomous Agent for Offensive Security — Final Presentation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    overflow: hidden;
+    height: 100vh;
+  }
+  .slide {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    padding: 48px 70px;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+  .slide.active { display: flex; }
+  .slide.title-slide { justify-content: center; align-items: center; text-align: center; }
+  h1 { font-size: 42px; font-weight: 700; color: #fff; margin-bottom: 16px; }
+  h2 { font-size: 30px; font-weight: 600; color: #7ec8e3; margin-bottom: 18px; border-bottom: 2px solid #333; padding-bottom: 10px; }
+  h3 { font-size: 20px; font-weight: 600; color: #c9a0dc; margin: 14px 0 8px 0; }
+  .subtitle { font-size: 20px; color: #aaa; margin-bottom: 12px; }
+  .authors { font-size: 18px; color: #888; margin-bottom: 8px; }
+  .affiliation { font-size: 15px; color: #666; margin-bottom: 30px; }
+  .tag { display: inline-block; background: #2a2a3e; border: 1px solid #444; color: #aaa; padding: 6px 14px; border-radius: 4px; font-size: 13px; margin: 3px; }
+  p, li { font-size: 16.5px; line-height: 1.6; color: #ccc; }
+  ul { margin: 6px 0 6px 30px; }
+  li { margin-bottom: 5px; }
+  strong { color: #e0e0e0; }
+  pre {
+    background: #0d1117; border: 1px solid #333; border-radius: 6px;
+    padding: 12px 16px; font-family: 'Menlo','Consolas',monospace;
+    font-size: 12.5px; line-height: 1.5; color: #c9d1d9;
+    overflow-x: auto; margin: 8px 0;
+  }
+  code { font-family: 'Menlo','Consolas',monospace; background: #2a2a3e; padding: 1px 6px; border-radius: 3px; font-size: 13.5px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 8px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-top: 8px; }
+  .note { background: #1e2a3a; border-left: 3px solid #7ec8e3; padding: 10px 14px; margin: 10px 0; font-size: 14.5px; color: #aac; }
+  .warn { background: #2a1e1e; border-left: 3px solid #e87070; padding: 10px 14px; margin: 10px 0; font-size: 14.5px; color: #caa; }
+  .diagram { background: #0d1117; border: 1px solid #333; border-radius: 6px; padding: 18px; font-family: 'Menlo','Consolas',monospace; font-size: 13.5px; line-height: 1.45; color: #8b949e; white-space: pre; margin: 8px 0; }
+  .hl { color: #7ec8e3; } .hl2 { color: #c9a0dc; } .hl3 { color: #7ee8a0; } .hl4 { color: #e8c87e; }
+  .kw { color: #ff7b72; } .fn { color: #d2a8ff; } .str { color: #a5d6ff; } .cm { color: #8b949e; } .typ { color: #79c0ff; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 14px 0; }
+  .metric-card { background: #111827; border: 1.5px solid #333; border-radius: 10px; padding: 18px; text-align: center; }
+  .metric-val { font-size: 36px; font-weight: 700; color: #7ee8a0; }
+  .metric-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-top: 4px; }
+  .risk-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+  .risk-table th { background: #111827; color: #7ec8e3; text-align: left; padding: 8px 12px; border-bottom: 2px solid #333; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .risk-table td { padding: 7px 12px; border-bottom: 1px solid #222; color: #ccc; }
+  .risk-table tr:hover td { background: #1a1a2e; }
+  .sev-critical { color: #f85149; font-weight: 600; }
+  .sev-high { color: #e8923e; font-weight: 600; }
+  .sev-medium { color: #e8c87e; }
+  .sev-low { color: #7ee8a0; }
+  .nav { position: fixed; bottom: 24px; right: 30px; display: flex; gap: 10px; align-items: center; z-index: 100; }
+  .nav button { background: #2a2a3e; border: 1px solid #444; color: #ccc; width: 38px; height: 38px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+  .nav button:hover { background: #3a3a5e; }
+  .slide-num { font-family: monospace; font-size: 14px; color: #666; }
+  .progress { position: fixed; top: 0; left: 0; height: 3px; background: #7ec8e3; transition: width 0.3s; z-index: 100; }
+  .file-label { font-size: 11px; color: #666; font-family: monospace; margin-bottom: 2px; }
+  .speaker-notes {
+    margin-top: auto;
+    background: #111827;
+    border: 1px solid #2a3a4a;
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: 14.5px;
+    line-height: 1.65;
+    color: #b0c4de;
+  }
+  .speaker-notes .notes-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #556;
+    margin-bottom: 6px;
+  }
+  .notes-hidden .speaker-notes { display: none; }
+</style>
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+
+<!-- ===== SLIDE 1: Title ===== -->
+<div class="slide title-slide active">
+  <h1>An LLM-Driven Autonomous Agent<br>for Offensive Security Analysis</h1>
+  <p class="subtitle">Final Presentation</p>
+  <p class="authors">Alex Zhou, Eliot Pontarelli, Jason Gao</p>
+  <p class="affiliation">Department of Computer Science, University of Colorado Boulder</p>
+  <div style="margin-top: 20px;">
+    <span class="tag">Local LLM (Llama 3 via Ollama)</span>
+    <span class="tag">Autonomous Agent Loop</span>
+    <span class="tag">Binary Vulnerability Analysis</span>
+    <span class="tag">Multi-Step Attack Chains</span>
+    <span class="tag">Safety Guardrails</span>
+  </div>
+  <p style="margin-top: 30px; font-size: 14px; color: #555;">~5,700 lines of Python &middot; 57 tests &middot; Zero external dependencies &middot; 4 CTF targets</p>
+</div>
+
+<!-- ===== SLIDE 2: Problem Statement ===== -->
+<div class="slide">
+  <h2>Problem Statement</h2>
+  <p>Security analysts manually repeat the same workflow for every binary they assess:</p>
+  <div class="diagram" style="text-align: center;">
+<span class="hl">Identify target</span>  &rarr;  <span class="hl2">Fuzz for crashes</span>  &rarr;  <span class="hl3">Disassemble</span>  &rarr;  <span class="hl4">Classify vulnerability</span>  &rarr;  <span class="hl">Report</span></div>
+
+  <h3>Can an LLM autonomously drive this pipeline?</h3>
+  <ul>
+    <li><strong>Plan</strong> which tool to use based on what it already knows</li>
+    <li><strong>Execute</strong> security tools (GDB, objdump, nmap) via subprocess</li>
+    <li><strong>Summarize</strong> raw tool output into structured findings</li>
+    <li><strong>Remember</strong> across steps to avoid redundant work</li>
+    <li><strong>Stop</strong> when analysis is complete</li>
+  </ul>
+  <div class="note">Goal: build the analysis phase of a red team agent &mdash; find and classify vulnerabilities, but deliberately stop before exploitation.</div>
+</div>
+
+<!-- ===== SLIDE 3: Architecture Overview ===== -->
+<div class="slide">
+  <h2>System Architecture</h2>
+  <div class="diagram">
+                          <span class="hl">User Task</span>
+                             &darr;
+                    &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+                    &boxv;  <span class="hl2">LLM Planner</span>        &boxv;   Llama 3 (8B) via Ollama
+                    &boxv;  Which skill next?   &boxv;   Falls back to keyword matching
+                    &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;
+                             &darr;
+          &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+          &darr;                &darr;              &darr;
+   <span class="hl3">gdb_debug</span>       <span class="hl3">disassemble</span>    <span class="hl3">network_scan</span>
+   Fuzz &amp; crash     Static analysis   Port/service
+   detection        vuln patterns     discovery
+          &darr;                &darr;              &darr;
+          &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9524;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;
+                             &darr;
+                    &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+                    &boxv;  <span class="hl4">Summarizer</span>         &boxv;   LLM or rule-based fallback
+                    &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9516;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;
+                             &darr;
+                    &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+                    &boxv;  <span class="hl">Memory Manager</span>     &boxv;   Persists across turns
+                    &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;
+                             &darr;
+                     Loop back to Planner
+  </div>
+</div>
+
+<!-- ===== SLIDE 4: Agent Loop Code ===== -->
+<div class="slide">
+  <h2>Agent Loop: Plan &rarr; Execute &rarr; Summarize &rarr; Remember</h2>
+  <p class="file-label">agent/agent.py &mdash; run_chain()</p>
+  <pre><span class="kw">def</span> <span class="fn">run_chain</span>(self, task, context, max_steps=<span class="typ">5</span>):
+    <span class="str">"""Autonomous multi-step analysis chain."""</span>
+    <span class="kw">for</span> step_num <span class="kw">in</span> range(<span class="typ">1</span>, max_steps + <span class="typ">1</span>):
+        <span class="cm"># 1. Build context-aware prompt for the planner</span>
+        chain_task = self._build_chain_prompt(task, step_num, max_steps)
+
+        <span class="cm"># 2. Run one full agent turn (plan + execute + summarize + store)</span>
+        step_result = self.run(chain_task, context=persistent_context)
+
+        <span class="cm"># 3. Planner signals "done" &rarr; stop the chain</span>
+        <span class="kw">if</span> step_result.get(<span class="str">"skill_used"</span>) <span class="kw">is</span> <span class="typ">None</span>:
+            <span class="kw">break</span>
+
+    <span class="cm"># Build final report from accumulated memory</span>
+    <span class="kw">return</span> self._build_chain_report(task, steps)</pre>
+
+  <div class="two-col">
+    <div>
+      <h3>Each turn:</h3>
+      <ul>
+        <li>Planner reads memory snapshot + skill catalog</li>
+        <li>Selects best skill + extracts arguments</li>
+        <li>Skill executes via subprocess</li>
+        <li>Summarizer compresses output</li>
+        <li>Memory updated with findings</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Chain awareness:</h3>
+      <ul>
+        <li>Planner knows which skills were already used</li>
+        <li>Guided ordering: debug &rarr; disassemble</li>
+        <li>Stops when all relevant skills are complete</li>
+        <li>Hard limit prevents infinite loops</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 5: LLM Planner ===== -->
+<div class="slide">
+  <h2>LLM Planner: Skill Selection</h2>
+  <p class="file-label">agent/agent.py &mdash; _plan()</p>
+  <pre><span class="cm"># The planner asks Llama 3 to pick a skill and extract arguments</span>
+prompt = (
+    <span class="str">f"TASK: {task}\n"
+    f"CURRENT MEMORY STATE:\n{json.dumps(memory)}\n"
+    f"AVAILABLE SKILLS:\n{json.dumps(skills_catalog)}\n\n"
+    "Select the best skill. Respond with ONLY JSON:\n"
+    '{"skill": "...", "arguments": {...}, "reasoning_summary": "..."}'</span>
+)
+
+<span class="kw">try</span>:
+    plan = self.llm.generate_json(prompt, system_prompt=PLANNER_SYSTEM)
+<span class="kw">except</span> OllamaError:
+    <span class="cm"># Fall back to keyword matching if LLM unavailable</span>
+    plan = self._keyword_fallback(task, context)</pre>
+
+  <div class="two-col">
+    <div>
+      <h3>LLM Mode (Ollama running)</h3>
+      <ul>
+        <li>Llama 3 (8B) running locally via Ollama</li>
+        <li>No data leaves the machine</li>
+        <li>Understands context and natural language tasks</li>
+        <li>JSON output with retry on parse failure</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Fallback Mode (no Ollama)</h3>
+      <ul>
+        <li>Keyword matching against skill catalog</li>
+        <li>Deterministic skill ordering for chains</li>
+        <li>Regex-based argument extraction</li>
+        <li>Pipeline never breaks &mdash; graceful degradation</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 6: GDB Debug Skill ===== -->
+<div class="slide">
+  <h2>Skill: GDB Debugger &mdash; Crash Discovery</h2>
+  <p class="file-label">skills/gdb_debug.py</p>
+  <pre><span class="cm"># Fuzz inputs designed to trigger common vulnerability classes</span>
+FUZZ_INPUTS = [
+    <span class="str">"A"</span> * <span class="typ">200</span>,                    <span class="cm"># Buffer overflow</span>
+    <span class="str">"A"</span> * <span class="typ">500</span>,                    <span class="cm"># Longer overflow (return addr)</span>
+    <span class="str">"%x."</span> * <span class="typ">50</span>,                   <span class="cm"># Format string (leak stack)</span>
+    <span class="str">"%s%s%s%s%s%s%s%s%s%s"</span>,       <span class="cm"># Format string (crash)</span>
+    <span class="str">"A"</span>*<span class="typ">100</span> + <span class="str">"\x00"</span> + <span class="str">"B"</span>*<span class="typ">100</span>,  <span class="cm"># Null injection</span>
+    generate_cyclic_pattern(<span class="typ">300</span>), <span class="cm"># De Bruijn pattern (find offset)</span>
+]
+
+<span class="cm"># Run each input, capture signal + crash context</span>
+<span class="kw">for</span> label, test_input <span class="kw">in</span> zip(labels, all_inputs):
+    result = run_gdb_analysis(binary_path, stdin_input=test_input)
+    <span class="kw">if</span> result[<span class="str">"crashed"</span>]:
+        crashes.append(result)  <span class="cm"># signal, fault addr, backtrace</span></pre>
+
+  <div class="note">Runs the binary with each test input via subprocess, catches crash signals (SIGSEGV, SIGBUS, SIGABRT), and reports which inputs triggered crashes. On macOS ARM64, uses direct execution with signal analysis; on Linux, uses GDB batch mode.</div>
+</div>
+
+<!-- ===== SLIDE 7: Disassembler Skill ===== -->
+<div class="slide">
+  <h2>Skill: Disassembler &mdash; Vulnerability Classification</h2>
+  <p class="file-label">tools/disassembler.py</p>
+  <pre><span class="cm"># Dangerous functions tracked for pattern analysis</span>
+DANGEROUS_FUNCTIONS = {
+    <span class="str">"gets"</span>:    {<span class="str">"category"</span>: <span class="str">"buffer_overflow"</span>,  <span class="str">"severity"</span>: <span class="str">"critical"</span>},
+    <span class="str">"strcpy"</span>:  {<span class="str">"category"</span>: <span class="str">"buffer_overflow"</span>,  <span class="str">"severity"</span>: <span class="str">"high"</span>},
+    <span class="str">"sprintf"</span>: {<span class="str">"category"</span>: <span class="str">"buffer_overflow"</span>,  <span class="str">"severity"</span>: <span class="str">"high"</span>},
+    <span class="str">"printf"</span>:  {<span class="str">"category"</span>: <span class="str">"format_string"</span>,    <span class="str">"severity"</span>: <span class="str">"medium"</span>},
+    <span class="str">"free"</span>:    {<span class="str">"category"</span>: <span class="str">"use_after_free"</span>,   <span class="str">"severity"</span>: <span class="str">"info"</span>},
+    <span class="str">"malloc"</span>:  {<span class="str">"category"</span>: <span class="str">"memory_management"</span>, <span class="str">"severity"</span>: <span class="str">"info"</span>},
+    ...
+}
+
+<span class="cm"># Cross-reference: only flag format_string when user input exists</span>
+input_sources = all_func_names &amp; {<span class="str">"gets"</span>, <span class="str">"fgets"</span>, <span class="str">"scanf"</span>}
+<span class="kw">if</span> has_user_input:
+    patterns.append({<span class="str">"vulnerability"</span>: <span class="str">"format_string"</span>, ...})</pre>
+
+  <div class="two-col">
+    <div>
+      <h3>Static Analysis</h3>
+      <ul>
+        <li>Disassembly via <code>objdump</code></li>
+        <li>Symbol table via <code>nm</code> (catches macOS stubs)</li>
+        <li>Handles fortified variants (<code>__strcpy_chk</code>)</li>
+        <li>Cross-references input sources with dangerous sinks</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Binary Metadata</h3>
+      <ul>
+        <li>Architecture, endianness, bit width</li>
+        <li>Protection status: NX, PIE, RELRO, stripped</li>
+        <li>String extraction for hardcoded secrets</li>
+        <li>Overall risk score: low &rarr; critical</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 8: Memory Manager ===== -->
+<div class="slide">
+  <h2>Memory Manager: State Across Steps</h2>
+  <p class="file-label">core/memory_manager.py</p>
+  <pre><span class="kw">@dataclass</span>
+<span class="kw">class</span> <span class="typ">MemoryManager</span>:
+    current_target: <span class="typ">str</span> | <span class="typ">None</span> = <span class="typ">None</span>
+    discovered_open_ports: list[<span class="typ">int</span>]   <span class="cm"># from network_scan</span>
+    discovered_services: dict[str, str]
+    analyzed_binaries: dict[str, dict]  <span class="cm"># from disassemble</span>
+    crash_data: list[dict]              <span class="cm"># from gdb_debug</span>
+    vulnerabilities: list[dict]         <span class="cm"># classified findings</span>
+    findings: list[str]                 <span class="cm"># human-readable summaries</span>
+    attempted_actions: list[ActionRecord]
+    condensed_history: list[str]        <span class="cm"># LLM-compressed summaries</span>
+
+    <span class="kw">def</span> <span class="fn">get_context_snapshot</span>(self) -&gt; dict:
+        <span class="str">"""Compact dict the planner reads each turn."""</span>
+        <span class="kw">return</span> {<span class="str">"current_target"</span>: ..., <span class="str">"crash_data"</span>: ..., ...}</pre>
+
+  <div class="note">
+    <strong>Why memory matters:</strong> Without it, each step starts from zero. The planner needs to know "GDB already found 5 crashes" so it picks disassembly next, not another scan. Memory also prevents context bloat &mdash; raw GDB output is ~2KB, the summary is ~100 bytes.
+  </div>
+</div>
+
+<!-- ===== SLIDE 9: Vulnerable Targets ===== -->
+<div class="slide">
+  <h2>CTF-Style Vulnerable Targets</h2>
+  <p>4 intentionally vulnerable C binaries compiled without protections:</p>
+  <div class="two-col">
+    <div>
+      <p class="file-label">targets/vuln_bof.c &mdash; Stack Buffer Overflow</p>
+      <pre><span class="kw">void</span> <span class="fn">vulnerable_function</span>() {
+    <span class="kw">char</span> buffer[<span class="typ">64</span>];
+    printf(<span class="str">"Enter your name: "</span>);
+    gets(buffer);  <span class="cm">/* no bounds checking */</span>
+    printf(<span class="str">"Hello, %s!\n"</span>, buffer);
+}</pre>
+
+      <p class="file-label">targets/vuln_fmt.c &mdash; Format String</p>
+      <pre><span class="kw">void</span> <span class="fn">vulnerable_function</span>() {
+    <span class="kw">char</span> buffer[<span class="typ">256</span>];
+    fgets(buffer, <span class="kw">sizeof</span>(buffer), stdin);
+    printf(buffer); <span class="cm">/* user-controlled format */</span>
+}</pre>
+    </div>
+    <div>
+      <p class="file-label">targets/vuln_uaf.c &mdash; Use-After-Free</p>
+      <pre>User *user = malloc(<span class="kw">sizeof</span>(User));
+user-&gt;handler = normal_handler;
+free(user);         <span class="cm">/* freed */</span>
+<span class="kw">char</span> *new = malloc(<span class="kw">sizeof</span>(User));
+fgets(new, ...);
+user-&gt;handler(...); <span class="cm">/* dangling! */</span></pre>
+
+      <p class="file-label">targets/vuln_heap.c &mdash; Heap Overflow</p>
+      <pre>Account *acct = malloc(<span class="kw">sizeof</span>(Account));
+acct-&gt;is_admin = <span class="typ">0</span>;
+fgets(input, <span class="typ">256</span>, stdin);
+strcpy(acct-&gt;buffer, input); <span class="cm">/* overflow! */</span>
+<span class="kw">if</span> (acct-&gt;is_admin) <span class="cm">/* corrupted */</span></pre>
+    </div>
+  </div>
+  <p style="margin-top:10px; font-size:14px; color:#888;">Compiled with: <code>gcc -fno-stack-protector -g</code> &mdash; protections intentionally disabled for analysis</p>
+</div>
+
+<!-- ===== SLIDE 10: Demo Walkthrough ===== -->
+<div class="slide">
+  <h2>Live Demo: Agent Analyzes vuln_bof</h2>
+  <pre style="font-size: 12px; line-height: 1.4;">$ python examples/demo_full_chain.py targets/vuln_bof
+
+  <span class="hl">Planner mode: LLM (Llama 3 via Ollama)</span>
+  Skills: gdb_debug, disassemble, network_scan
+
+  Running Analysis Chain:
+
+    Step 1: [OK] <span class="hl3">gdb_debug</span>
+           <span class="hl2">Reason: Binary analysis task &mdash; start with crash discovery</span>
+           Crashes found: 5
+           Indicators: memory_corruption, bus_error
+
+    Step 2: [OK] <span class="hl3">disassemble</span>
+           <span class="hl2">Reason: Crashes confirmed &mdash; classify the vulnerability via static analysis</span>
+           Risk level: CRITICAL
+           Found: buffer_overflow (HIGH confidence)
+           Missing: Not stripped (symbols available to attacker)
+
+    Step 3: [DONE] <span class="hl4">Analysis complete</span>
+
+  <span class="hl">Vulnerabilities Found:</span>
+    [HIGH] buffer_overflow
+      Binary calls gets which can overflow stack/heap buffers.
+
+  <span class="hl">Binary Analysis:</span>
+    Architecture: arm64 64-bit little-endian
+    Protections:  nx=enabled, pie=enabled, stripped=DISABLED
+    Risk level:   CRITICAL</pre>
+</div>
+
+<!-- ===== SLIDE 11: Evaluation Results ===== -->
+<div class="slide">
+  <h2>Evaluation Results</h2>
+  <p>Agent evaluated on all 4 CTF targets with ground truth labels:</p>
+
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-val">100%</div>
+      <div class="metric-label">Completion Rate</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">100%</div>
+      <div class="metric-label">Vuln Class Accuracy</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">100%</div>
+      <div class="metric-label">Crash Detection</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">3.0</div>
+      <div class="metric-label">Avg Steps / Target</div>
+    </div>
+  </div>
+
+  <table class="risk-table" style="margin-top: 16px;">
+    <tr><th>Target</th><th>Expected Vuln</th><th>Found</th><th>Crashes</th><th>Dangerous Funcs</th><th>Result</th></tr>
+    <tr><td>vuln_bof</td><td>buffer_overflow</td><td>buffer_overflow, format_string</td><td>5</td><td>gets</td><td class="sev-low">PASS</td></tr>
+    <tr><td>vuln_fmt</td><td>format_string</td><td>format_string</td><td>1</td><td>printf</td><td class="sev-low">PASS</td></tr>
+    <tr><td>vuln_uaf</td><td>use_after_free</td><td>format_string, use_after_free</td><td>6</td><td>malloc, free</td><td class="sev-low">PASS</td></tr>
+    <tr><td>vuln_heap</td><td>buffer_overflow</td><td>buffer_overflow, format_string, uaf</td><td>5</td><td>strcpy</td><td class="sev-low">PASS</td></tr>
+  </table>
+
+  <div class="note">Evaluation framework: <code>python evaluation/evaluate.py -v</code> &mdash; compares agent findings against ground truth labels for each binary.</div>
+</div>
+
+<!-- ===== SLIDE 12: Safety & Risk Analysis ===== -->
+<div class="slide">
+  <h2>Safety &amp; Risk Analysis</h2>
+  <p>10 identified risks across 5 categories:</p>
+
+  <table class="risk-table">
+    <tr><th>ID</th><th>Risk</th><th>Category</th><th>Severity</th><th>Mitigation</th></tr>
+    <tr><td>R-001</td><td>False vulnerability report</td><td>LLM Hallucination</td><td class="sev-high">High</td><td>Rule-based fallback validates LLM output</td></tr>
+    <tr><td>R-003</td><td>Scans unauthorized targets</td><td>Scope Escalation</td><td class="sev-critical">Critical</td><td>IP validation + planner system prompt</td></tr>
+    <tr><td>R-004</td><td>Agent exploits (not just analyzes)</td><td>Scope Escalation</td><td class="sev-critical">Critical</td><td>Skill registry is a hard boundary &mdash; no exploit skills exist</td></tr>
+    <tr><td>R-005</td><td>Command injection via path</td><td>Tool Misuse</td><td class="sev-high">High</td><td>subprocess list args (no shell=True) + path validation</td></tr>
+    <tr><td>R-007</td><td>Unbounded agent loop</td><td>Autonomy</td><td class="sev-medium">Medium</td><td>Hard max_steps limit (default: 5)</td></tr>
+  </table>
+
+  <div class="two-col" style="margin-top: 14px;">
+    <div>
+      <h3>Architectural Safeguards</h3>
+      <ul>
+        <li><strong>Skill registry boundary</strong> &mdash; can only run registered skills</li>
+        <li><strong>Local-only LLM</strong> &mdash; no data leaves the machine</li>
+        <li><strong>Subprocess timeouts</strong> &mdash; prevent resource exhaustion</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Runtime Guardrails</h3>
+      <ul>
+        <li>Block system paths (<code>/usr/bin/</code>)</li>
+        <li>Warn on non-private IPs</li>
+        <li>Audit log of all decisions</li>
+        <li>Binary size limits (100MB max)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 13: Safety Code ===== -->
+<div class="slide">
+  <h2>Safety Guardrails: Code</h2>
+  <p class="file-label">safety/risk_analysis.py &mdash; SafetyGuardrails</p>
+  <pre><span class="kw">class</span> <span class="typ">SafetyGuardrails</span>:
+    BLOCKED_PATHS = [<span class="str">"/usr/bin/"</span>, <span class="str">"/usr/sbin/"</span>, <span class="str">"/bin/"</span>, <span class="str">"/sbin/"</span>]
+    MAX_BINARY_SIZE = <span class="typ">100</span> * <span class="typ">1024</span> * <span class="typ">1024</span>  <span class="cm"># 100 MB</span>
+
+    <span class="kw">def</span> <span class="fn">check_binary_path</span>(self, path):
+        <span class="kw">for</span> blocked <span class="kw">in</span> self.BLOCKED_PATHS:
+            <span class="kw">if</span> abs_path.startswith(blocked):
+                self._audit(<span class="str">"BLOCKED"</span>, f<span class="str">"System path: {abs_path}"</span>)
+                <span class="kw">return</span> <span class="typ">False</span>, <span class="str">"Blocked: system binary"</span>
+        <span class="kw">return</span> <span class="typ">True</span>, <span class="str">"OK"</span>
+
+    <span class="kw">def</span> <span class="fn">check_target_ip</span>(self, ip):
+        safe_prefixes = [<span class="str">"127."</span>, <span class="str">"10."</span>, <span class="str">"192.168."</span>, ...]
+        <span class="kw">if</span> <span class="kw">any</span>(ip.startswith(p) <span class="kw">for</span> p <span class="kw">in</span> safe_prefixes):
+            <span class="kw">return</span> <span class="typ">True</span>, <span class="str">"OK"</span>
+        <span class="kw">return</span> <span class="typ">True</span>, <span class="str">"WARNING: not a private IP"</span></pre>
+
+  <h3>Failure Modes (Handled)</h3>
+  <div class="three-col">
+    <div class="note" style="border-color: #7ee8a0;">
+      <strong>LLM Unavailable</strong><br>
+      Falls back to keyword planner + rule-based summarizer. Pipeline never breaks.
+    </div>
+    <div class="note" style="border-color: #7ee8a0;">
+      <strong>LLM Hallucinates Skill</strong><br>
+      Registry lookup fails &rarr; "skill not registered" &rarr; wasted step, not crash.
+    </div>
+    <div class="note" style="border-color: #e87070;">
+      <strong>Adversarial Binary</strong><br>
+      Anti-debug (ptrace) can evade analysis. Out of scope for this prototype.
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 14: Testing ===== -->
+<div class="slide">
+  <h2>Testing &amp; Quality</h2>
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-val">57</div>
+      <div class="metric-label">Unit Tests</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">100%</div>
+      <div class="metric-label">Pass Rate</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">5,700</div>
+      <div class="metric-label">Lines of Python</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">0</div>
+      <div class="metric-label">External Deps</div>
+    </div>
+  </div>
+
+  <div class="two-col" style="margin-top: 14px;">
+    <div>
+      <h3>Test Coverage</h3>
+      <ul>
+        <li><strong>test_agent.py</strong> &mdash; chain logic, keyword fallback, skill ordering, chain completion, vuln detection</li>
+        <li><strong>test_disassembler.py</strong> &mdash; function parsing, dangerous call detection, false positive prevention, binary info</li>
+        <li><strong>test_gdb_runner.py</strong> &mdash; crash detection, signal parsing, input validation</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Test Coverage (cont.)</h3>
+      <ul>
+        <li><strong>test_memory_manager.py</strong> &mdash; state tracking, deduplication, serialization</li>
+        <li><strong>test_skills.py</strong> &mdash; end-to-end skill execution on real binaries</li>
+        <li><strong>test_safety.py</strong> &mdash; guardrails, path blocking, IP validation, risk taxonomy</li>
+        <li><strong>test_skill_registry.py</strong> &mdash; registration, lookup, input validation</li>
+      </ul>
+    </div>
+  </div>
+  <pre style="font-size: 12px; margin-top: 10px;">$ python -m unittest discover -s tests -v
+<span class="cm">Ran 57 tests in 0.6s ... OK</span></pre>
+</div>
+
+<!-- ===== SLIDE 15: Project Structure ===== -->
+<div class="slide">
+  <h2>Project Structure</h2>
+  <div class="two-col">
+    <div>
+      <div class="diagram" style="font-size: 12.5px;">offense-defense-agent/
+<span class="hl2">&boxvr;&boxh;&boxh; agent/</span>
+&boxv;   &boxur;&boxh;&boxh; agent.py         <span class="cm"># Agent loop + chain</span>
+<span class="hl">&boxvr;&boxh;&boxh; core/</span>
+&boxv;   &boxvr;&boxh;&boxh; llm_client.py    <span class="cm"># Ollama wrapper</span>
+&boxv;   &boxvr;&boxh;&boxh; memory_manager.py<span class="cm"># Structured state</span>
+&boxv;   &boxvr;&boxh;&boxh; skill_base.py    <span class="cm"># Abstract skill</span>
+&boxv;   &boxvr;&boxh;&boxh; skill_registry.py<span class="cm"># Skill discovery</span>
+&boxv;   &boxur;&boxh;&boxh; summarizer.py    <span class="cm"># Output compression</span>
+<span class="hl3">&boxvr;&boxh;&boxh; skills/</span>
+&boxv;   &boxvr;&boxh;&boxh; gdb_debug.py     <span class="cm"># Crash discovery</span>
+&boxv;   &boxvr;&boxh;&boxh; disassemble.py   <span class="cm"># Vuln classification</span>
+&boxv;   &boxur;&boxh;&boxh; network_scan.py  <span class="cm"># Port scanning</span>
+<span class="hl4">&boxvr;&boxh;&boxh; tools/</span>
+&boxv;   &boxvr;&boxh;&boxh; gdb_runner.py    <span class="cm"># GDB/LLDB/direct</span>
+&boxv;   &boxvr;&boxh;&boxh; disassembler.py  <span class="cm"># objdump + nm</span>
+&boxv;   &boxur;&boxh;&boxh; nmap_runner.py   <span class="cm"># nmap wrapper</span></div>
+    </div>
+    <div>
+      <div class="diagram" style="font-size: 12.5px;">
+<span class="sev-critical">&boxvr;&boxh;&boxh; targets/</span>
+&boxv;   &boxvr;&boxh;&boxh; vuln_bof.c       <span class="cm"># Buffer overflow</span>
+&boxv;   &boxvr;&boxh;&boxh; vuln_fmt.c       <span class="cm"># Format string</span>
+&boxv;   &boxvr;&boxh;&boxh; vuln_uaf.c       <span class="cm"># Use-after-free</span>
+&boxv;   &boxvr;&boxh;&boxh; vuln_heap.c      <span class="cm"># Heap overflow</span>
+&boxv;   &boxur;&boxh;&boxh; Makefile
+<span class="sev-medium">&boxvr;&boxh;&boxh; evaluation/</span>
+&boxv;   &boxur;&boxh;&boxh; evaluate.py      <span class="cm"># Metrics framework</span>
+<span class="sev-high">&boxvr;&boxh;&boxh; safety/</span>
+&boxv;   &boxur;&boxh;&boxh; risk_analysis.py <span class="cm"># 10-risk taxonomy</span>
+&boxvr;&boxh;&boxh; tests/              <span class="cm"># 57 unit tests</span>
+&boxur;&boxh;&boxh; examples/
+    &boxvr;&boxh;&boxh; demo_full_chain.py<span class="cm"># Main demo</span>
+    &boxvr;&boxh;&boxh; preflight.py     <span class="cm"># Pre-demo check</span>
+    &boxur;&boxh;&boxh; demo_agent_session.py</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 16: Key Design Decisions ===== -->
+<div class="slide">
+  <h2>Key Design Decisions</h2>
+  <div class="two-col">
+    <div>
+      <h3>Why local LLM?</h3>
+      <ul>
+        <li>Security tool output should never leave the machine</li>
+        <li>No API keys, no billing, no cloud dependency</li>
+        <li>Full control over model and context</li>
+        <li>Fallback ensures the system works without it</li>
+      </ul>
+
+      <h3>Why analysis only (no exploitation)?</h3>
+      <ul>
+        <li>Skill registry is a hard boundary</li>
+        <li>Adding exploit skills requires code changes + review</li>
+        <li>Lets us study autonomous offensive tooling safely</li>
+        <li>Analysis is the harder, more interesting problem</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Why zero dependencies?</h3>
+      <ul>
+        <li>Runs anywhere Python is installed</li>
+        <li>No supply chain risk</li>
+        <li>stdlib has everything: subprocess, json, urllib, dataclasses</li>
+      </ul>
+
+      <h3>Why structured memory over raw context?</h3>
+      <ul>
+        <li>Raw GDB output: ~2KB per run</li>
+        <li>Structured summary: ~100 bytes</li>
+        <li>4 turns of raw output would exceed Llama 3's context</li>
+        <li>Planner only needs "5 crashes found" not the full trace</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SLIDE 17: Limitations & Future Work ===== -->
+<div class="slide">
+  <h2>Limitations &amp; Future Work</h2>
+  <div class="two-col">
+    <div>
+      <h3>Current Limitations</h3>
+      <ul>
+        <li><strong>Simple fuzz inputs</strong> &mdash; not a real fuzzer (no coverage guidance, no mutation)</li>
+        <li><strong>Anti-debug evasion</strong> &mdash; binaries with ptrace checks can evade analysis</li>
+        <li><strong>Small model</strong> &mdash; Llama 3 8B sometimes misparses JSON or picks wrong skills</li>
+        <li><strong>No exploitation</strong> &mdash; by design, but limits end-to-end red team utility</li>
+        <li><strong>Static vuln patterns</strong> &mdash; relies on known dangerous function names</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Future Work</h3>
+      <ul>
+        <li><strong>Coverage-guided fuzzing</strong> &mdash; integrate AFL/libFuzzer for smarter crash discovery</li>
+        <li><strong>Larger models</strong> &mdash; Llama 3 70B or fine-tuned security models</li>
+        <li><strong>Exploit generation</strong> &mdash; controlled payload generation in sandboxed environments</li>
+        <li><strong>Network attack chains</strong> &mdash; scan &rarr; identify service &rarr; check known CVEs</li>
+        <li><strong>Multi-agent collaboration</strong> &mdash; separate red team and blue team agents</li>
+        <li><strong>Symbolic execution</strong> &mdash; integrate angr for path constraint solving</li>
+      </ul>
+    </div>
+  </div>
+  <div class="warn">
+    <strong>Ethical note:</strong> Autonomous offensive tools require careful governance. Our safety analysis documents 10 risks and 6 architectural safeguards &mdash; but responsible deployment requires scope controls, human oversight, and institutional review beyond what a prototype can provide.
+  </div>
+</div>
+
+<!-- ===== SLIDE 18: Conclusion ===== -->
+<div class="slide title-slide">
+  <h1>Conclusion</h1>
+  <p class="subtitle" style="max-width: 700px; margin: 0 auto 30px;">
+    We built an autonomous LLM-driven agent that performs the analysis phase of offensive security &mdash;
+    planning, debugging, disassembling, and classifying vulnerabilities across 4 vulnerability classes
+    with 100% accuracy.
+  </p>
+
+  <div class="metric-grid" style="max-width: 800px;">
+    <div class="metric-card">
+      <div class="metric-val">5,700</div>
+      <div class="metric-label">Lines of Code</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">3</div>
+      <div class="metric-label">Skills</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">4/4</div>
+      <div class="metric-label">Targets Correct</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-val">57</div>
+      <div class="metric-label">Tests Passing</div>
+    </div>
+  </div>
+
+  <div style="margin-top: 30px;">
+    <span class="tag">Local LLM</span>
+    <span class="tag">Zero Dependencies</span>
+    <span class="tag">Multi-Step Chains</span>
+    <span class="tag">Safety Guardrails</span>
+    <span class="tag">100% Accuracy</span>
+  </div>
+
+  <p style="margin-top: 30px; font-size: 14px; color: #555;">
+    Demo: <code>python examples/demo_full_chain.py --all</code>
+  </p>
+  <p class="authors" style="margin-top: 20px;">Alex Zhou, Eliot Pontarelli, Jason Gao</p>
+  <p class="affiliation">University of Colorado Boulder</p>
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+  <span class="slide-num"><span id="cur">1</span>/<span id="tot">18</span></span>
+  <button onclick="prev()">&#8592;</button>
+  <button onclick="next()">&#8594;</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let cur = 0;
+  document.getElementById('tot').textContent = slides.length;
+  function show(n) {
+    slides[cur].classList.remove('active');
+    cur = (n + slides.length) % slides.length;
+    slides[cur].classList.add('active');
+    document.getElementById('cur').textContent = cur + 1;
+    document.getElementById('progress').style.width = ((cur + 1) / slides.length * 100) + '%';
+  }
+  function next() { show(cur + 1); }
+  function prev() { show(cur - 1); }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+  });
+  let ts = 0;
+  document.addEventListener('touchstart', e => { ts = e.touches[0].clientX; });
+  document.addEventListener('touchend', e => {
+    const d = ts - e.changedTouches[0].clientX;
+    if (Math.abs(d) > 50) d > 0 ? next() : prev();
+  });
+  show(0);
+</script>
+
+</body>
+</html>
